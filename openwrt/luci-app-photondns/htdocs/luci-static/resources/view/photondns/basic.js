@@ -36,6 +36,12 @@ const callChinaListStatus = rpc.declare({
 	expect: { '': {} }
 });
 
+const callAdListStatus = rpc.declare({
+	object: 'luci.photondns',
+	method: 'adlist_status',
+	expect: { '': {} }
+});
+
 return view.extend({
 	load() {
 		return Promise.all([uci.load('photondns')]);
@@ -68,6 +74,7 @@ return view.extend({
 		s.tab('upstream', _('Upstreams'));
 		s.tab('failover', _('Failover'));
 		s.tab('cache', _('Cache'));
+		s.tab('adblock', _('Ad Block'));
 
 		/* ---- basic ---- */
 		o = s.taboption('basic', form.Flag, 'enabled', _('Enabled'));
@@ -110,6 +117,32 @@ return view.extend({
 			_('Answer HTTPS/SVCB queries with NXDOMAIN, forcing clients onto plain A/AAAA records'));
 		o.default = false;
 
+		o = s.taboption('basic', form.Value, 'query_log_size', _('Query log size'),
+			_('Number of recent queries kept in memory for the Query Log page; 0 disables it'));
+		o.datatype = 'and(uinteger,max(65536))';
+		o.default = '5000';
+
+		o = s.taboption('basic', form.Flag, 'auto_update', _('Auto-update lists'),
+			_('Refresh the enabled China / ad-block lists on a schedule (cron)'));
+		o.default = false;
+
+		o = s.taboption('basic', form.ListValue, 'update_day', _('Update day'));
+		o.value('*', _('Every day'));
+		o.value('0', _('Sunday'));
+		o.value('1', _('Monday'));
+		o.value('2', _('Tuesday'));
+		o.value('3', _('Wednesday'));
+		o.value('4', _('Thursday'));
+		o.value('5', _('Friday'));
+		o.value('6', _('Saturday'));
+		o.default = '*';
+		o.depends('auto_update', '1');
+
+		o = s.taboption('basic', form.Value, 'update_time', _('Update hour (0-23)'));
+		o.datatype = 'and(uinteger,max(23))';
+		o.default = '4';
+		o.depends('auto_update', '1');
+
 		/* ---- upstream ---- */
 		o = s.taboption('upstream', form.DynamicList, 'upstream', _('Primary DNS servers'),
 			_('Formats: 1.2.3.4, udp://host, tcp://host, tls://host (DoT), https://host/dns-query (DoH)'));
@@ -144,7 +177,7 @@ return view.extend({
 		o.depends('china_list', '1');
 		o.cfgvalue = () => L.resolveDefault(callChinaListStatus(), {}).then(st => {
 			if (!st || !st.exists)
-				return _('not downloaded yet - use the China List page to download it');
+				return _('not downloaded yet - use the List Updates page to download it');
 			return _('%d domains, updated %s').format(st.domains,
 				new Date(st.mtime * 1000).toLocaleString());
 		});
@@ -161,6 +194,30 @@ return view.extend({
 			_('How long pooled TCP/DoT/DoH connections stay open'));
 		o.datatype = 'and(uinteger,min(5))';
 		o.default = '30';
+
+		/* ---- adblock ---- */
+		o = s.taboption('adblock', form.Flag, 'adblock', _('Enable DNS ad blocking'),
+			_('Answer known advertising / tracker domains with NXDOMAIN'));
+		o.default = false;
+		o.rmempty = false;
+
+		o = s.taboption('adblock', form.DynamicList, 'ad_source', _('Ad list sources'),
+			_('Plain domain lists, mosdns domain:/full: lists or hosts-format files, one URL per entry'));
+		o.value('https://cdn.jsdelivr.net/gh/privacy-protection-tools/anti-AD@master/anti-ad-domains.txt', 'anti-AD (jsdelivr)');
+		o.value('https://raw.githubusercontent.com/privacy-protection-tools/anti-AD/master/anti-ad-domains.txt', 'anti-AD (github)');
+		o.value('https://cdn.jsdelivr.net/gh/Cats-Team/AdRules@main/mosdns_adrules.txt', 'Cats-Team AdRules (jsdelivr)');
+		o.value('https://raw.githubusercontent.com/Cats-Team/AdRules/main/mosdns_adrules.txt', 'Cats-Team AdRules (github)');
+		o.value('https://raw.githubusercontent.com/neodevpro/neodevhost/master/domain', 'NEO DEV HOST');
+		o.depends('adblock', '1');
+
+		o = s.taboption('adblock', form.DummyValue, '_adlist_status', _('Ad list status'));
+		o.depends('adblock', '1');
+		o.cfgvalue = () => L.resolveDefault(callAdListStatus(), {}).then(st => {
+			if (!st || !st.exists)
+				return _('not downloaded yet - use the List Updates page to download it');
+			return _('%d domains, updated %s').format(st.domains,
+				new Date(st.mtime * 1000).toLocaleString());
+		});
 
 		/* ---- failover ---- */
 		o = s.taboption('failover', form.ListValue, 'strategy', _('Strategy'),

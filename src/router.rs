@@ -143,7 +143,14 @@ impl Router {
                 }
             }
         }
-        let blocked = DomainSet::load(&cfg.block_file);
+        let mut blocked = DomainSet::load(&cfg.block_file);
+        let mut ad_count = 0;
+        if !cfg.ad_list_file.is_empty() {
+            let ads = DomainSet::load(&cfg.ad_list_file);
+            ad_count = ads.len();
+            blocked.full.extend(ads.full);
+            blocked.suffix.extend(ads.suffix);
+        }
         let mut local_domains = DomainSet::load(&cfg.local_domains_file);
         if !cfg.china_list_file.is_empty() {
             let china = DomainSet::load(&cfg.china_list_file);
@@ -162,9 +169,10 @@ impl Router {
             }
         }
         log::info!(
-            "router: {} hosts, {} blocked, {} local-domains, {} redirects",
+            "router: {} hosts, {} blocked ({} from ad lists), {} local-domains, {} redirects",
             hosts.len(),
             blocked.len(),
+            ad_count,
             local_domains.len(),
             redirects.len()
         );

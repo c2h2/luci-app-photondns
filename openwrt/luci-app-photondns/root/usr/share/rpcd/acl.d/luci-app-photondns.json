@@ -18,7 +18,10 @@
 					"print_log",
 					"clean_log",
 					"update_chinalist",
-					"chinalist_status"
+					"chinalist_status",
+					"update_adlist",
+					"adlist_status",
+					"query_log"
 				]
 			},
 			"uci": [ "photondns" ]

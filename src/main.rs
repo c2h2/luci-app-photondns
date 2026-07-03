@@ -5,6 +5,7 @@ mod dns;
 mod group;
 mod health;
 mod logger;
+mod qlog;
 mod router;
 mod server;
 mod stats;
@@ -103,6 +104,7 @@ async fn run(cfg: config::Config) -> Result<()> {
         groups: groups.clone(),
         stats: Arc::new(stats::Stats::new()),
         refresh_tx,
+        qlog: Arc::new(qlog::QueryLog::new(cfg.log.query_log_size)),
         cfg,
     });
 

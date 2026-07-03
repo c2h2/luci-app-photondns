@@ -7,8 +7,9 @@ use crate::dns;
 use crate::group::Group;
 use crate::router::{Decision, Router};
 use crate::stats::Stats;
+use crate::qlog::QueryLog;
 use anyhow::{Context, Result};
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -23,6 +24,7 @@ pub struct Ctx {
     pub groups: Vec<Arc<Group>>,
     pub stats: Arc<Stats>,
     pub refresh_tx: mpsc::Sender<RefreshJob>,
+    pub qlog: Arc<QueryLog>,
 }
 
 pub struct RefreshJob {
@@ -86,16 +88,16 @@ fn cache_store(ctx: &Ctx, key: cache::CacheKey, resp: &mut Vec<u8>, question_end
     );
 }
 
-/// Forward to the right group and fill the cache. Returns response with
-/// the *client's* original ID already restored.
+/// Forward to the right group and fill the cache. Returns the response with
+/// the *client's* original ID restored, plus (group name, winning upstream).
 async fn resolve_upstream(
     ctx: &Arc<Ctx>,
     query: &[u8],
     meta: &dns::QueryMeta,
     key: &cache::CacheKey,
-) -> Result<Vec<u8>> {
+) -> Result<(Vec<u8>, String, String)> {
     let group = ctx.group_for(&meta.qname, meta.qtype);
-    let mut resp = group.resolve(query, &ctx.stats).await?;
+    let (mut resp, winner) = group.resolve(query, &ctx.stats).await?;
     // sanity: response must echo our question (anti-spoofing / bug guard)
     match dns::parse_query(&resp) {
         Some(rmeta) if rmeta.qname == meta.qname && rmeta.qtype == meta.qtype => {}
@@ -103,7 +105,7 @@ async fn resolve_upstream(
     }
     cache_store(ctx, key.clone(), &mut resp, meta.question_end);
     dns::set_id(&mut resp, meta.id);
-    Ok(resp)
+    Ok((resp, group.name.clone(), winner))
 }
 
 /// Trigger a background refresh unless one is already running for the entry.
@@ -123,10 +125,16 @@ fn maybe_refresh(ctx: &Arc<Ctx>, entry: &CacheEntry, meta: &dns::QueryMeta, key:
 }
 
 /// The full pipeline. Returns None for packets that must be dropped.
-pub async fn handle_query(ctx: &Arc<Ctx>, query: &[u8], via_tcp: bool) -> Option<Vec<u8>> {
+pub async fn handle_query(
+    ctx: &Arc<Ctx>,
+    query: &[u8],
+    via_tcp: bool,
+    client: IpAddr,
+) -> Option<Vec<u8>> {
     if query.len() < dns::HEADER_LEN || dns::is_response(query) {
         return None;
     }
+    let start = Instant::now();
     let stats = &ctx.stats;
     stats.total.fetch_add(1, Ordering::Relaxed);
     stats.rate.incr();
@@ -143,20 +151,30 @@ pub async fn handle_query(ctx: &Arc<Ctx>, query: &[u8], via_tcp: bool) -> Option
         return Some(r);
     };
 
+    let qlog = |route: &str, upstream: &str| {
+        ctx.qlog
+            .record(client, &meta.qname, meta.qtype, route, upstream, start.elapsed());
+    };
+
     // routing decisions that answer locally
     match ctx.router.decide(&meta.qname, meta.qtype) {
         Decision::Hosts(ips) => {
             stats.hosts_served.fetch_add(1, Ordering::Relaxed);
-            return Some(dns::build_ip_reply(query, &meta, ips, ctx.router.hosts_ttl));
+            let r = dns::build_ip_reply(query, &meta, ips, ctx.router.hosts_ttl);
+            qlog("hosts", "");
+            return Some(r);
         }
         Decision::Block => {
             stats.blocked.fetch_add(1, Ordering::Relaxed);
+            qlog("blocked", "");
             return Some(dns::build_reply(query, meta.question_end, dns::RCODE_NXDOMAIN));
         }
         Decision::Redirect(target) => {
             stats.redirected.fetch_add(1, Ordering::Relaxed);
             let target = target.to_string();
-            return Some(resolve_redirect(ctx, query, &meta, &target).await);
+            let r = resolve_redirect(ctx, query, &meta, &target).await;
+            qlog("redirect", &target);
+            return Some(r);
         }
         Decision::Forward(_) => {}
     }
@@ -177,20 +195,26 @@ pub async fn handle_query(ctx: &Arc<Ctx>, query: &[u8], via_tcp: bool) -> Option
                         stats.prefetches.fetch_add(1, Ordering::Relaxed);
                         maybe_refresh(ctx, &entry, &meta, &key);
                     }
+                    qlog("cache", "");
                     return Some(finish(&entry.make_response(query, &meta, now), query, &meta, via_tcp));
                 }
                 Freshness::Stale if ctx.cfg.cache.serve_stale => {
                     stats.stale_served.fetch_add(1, Ordering::Relaxed);
                     maybe_refresh(ctx, &entry, &meta, &key);
+                    qlog("stale", "");
                     return Some(finish(&entry.make_response(query, &meta, now), query, &meta, via_tcp));
                 }
                 Freshness::Stale => {
                     // serve-stale disabled: try upstream, fall back to stale on failure
                     stats.cache_misses.fetch_add(1, Ordering::Relaxed);
                     return match resolve_upstream(ctx, query, &meta, &key).await {
-                        Ok(resp) => Some(finish(&resp, query, &meta, via_tcp)),
+                        Ok((resp, group, winner)) => {
+                            qlog(&group, &winner);
+                            Some(finish(&resp, query, &meta, via_tcp))
+                        }
                         Err(_) => {
                             stats.stale_served.fetch_add(1, Ordering::Relaxed);
+                            qlog("stale", "");
                             Some(finish(&entry.make_response(query, &meta, now), query, &meta, via_tcp))
                         }
                     };
@@ -202,11 +226,15 @@ pub async fn handle_query(ctx: &Arc<Ctx>, query: &[u8], via_tcp: bool) -> Option
 
     // miss -> upstream with failover
     match resolve_upstream(ctx, query, &meta, &key).await {
-        Ok(resp) => Some(finish(&resp, query, &meta, via_tcp)),
+        Ok((resp, group, winner)) => {
+            qlog(&group, &winner);
+            Some(finish(&resp, query, &meta, via_tcp))
+        }
         Err(e) => {
             log::debug!("resolve {} failed: {}", meta.qname, e);
             ctx.stats.upstream_errors.fetch_add(1, Ordering::Relaxed);
             ctx.stats.servfail.fetch_add(1, Ordering::Relaxed);
+            qlog("servfail", "");
             Some(dns::build_reply(query, meta.question_end, dns::RCODE_SERVFAIL))
         }
     }
@@ -239,7 +267,7 @@ async fn resolve_redirect(
     let tresp = match cached {
         Some(r) => r,
         None => match resolve_upstream(ctx, &tq, &tmeta, &tkey).await {
-            Ok(r) => r,
+            Ok((r, _, _)) => r,
             Err(_) => return dns::build_reply(query, meta.question_end, dns::RCODE_SERVFAIL),
         },
     };
@@ -303,7 +331,7 @@ pub async fn run_udp(ctx: Arc<Ctx>, addr: SocketAddr) -> Result<()> {
                         let ctx = ctx.clone();
                         let sock = sock.clone();
                         tokio::spawn(async move {
-                            if let Some(resp) = handle_query(&ctx, &query, false).await {
+                            if let Some(resp) = handle_query(&ctx, &query, false, peer.ip()).await {
                                 let _ = sock.send_to(&resp, peer).await;
                             }
                         });
@@ -330,7 +358,7 @@ pub async fn run_tcp(ctx: Arc<Ctx>, addr: SocketAddr) -> Result<()> {
     let idle = Duration::from_secs(ctx.cfg.server.tcp_idle_timeout.max(5));
     tokio::spawn(async move {
         loop {
-            let Ok((stream, _peer)) = listener.accept().await else {
+            let Ok((stream, peer)) = listener.accept().await else {
                 tokio::time::sleep(Duration::from_millis(5)).await;
                 continue;
             };
@@ -357,7 +385,7 @@ pub async fn run_tcp(ctx: Arc<Ctx>, addr: SocketAddr) -> Result<()> {
                     let ctx = ctx.clone();
                     let wr = wr.clone();
                     tokio::spawn(async move {
-                        if let Some(resp) = handle_query(&ctx, &qbuf, true).await {
+                        if let Some(resp) = handle_query(&ctx, &qbuf, true, peer.ip()).await {
                             let mut frame = Vec::with_capacity(resp.len() + 2);
                             frame.extend_from_slice(&(resp.len() as u16).to_be_bytes());
                             frame.extend_from_slice(&resp);
@@ -383,7 +411,7 @@ pub fn spawn_refresher(ctx: Arc<Ctx>, mut rx: mpsc::Receiver<RefreshJob>) {
                 };
                 let group = ctx.group_for(&job.qname, job.qtype);
                 match group.resolve(&q, &ctx.stats).await {
-                    Ok(mut resp) => {
+                    Ok((mut resp, _winner)) => {
                         // find question_end of the *response*
                         if let Some(rmeta) = dns::parse_query(&resp) {
                             if rmeta.qname == job.qname {

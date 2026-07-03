@@ -1,0 +1,67 @@
+#!/bin/sh
+# Download/update ad-block domain lists for photondns.
+# Sources come from uci photondns.main.ad_source (one URL per list entry);
+# default is anti-AD. Accepts plain domain lists, mosdns-style
+# domain:/full: lists and hosts-format (0.0.0.0 domain) files.
+
+LIST=/etc/photondns/ad_list.txt
+TMP=/tmp/photondns-adlist.$$
+LOCK=/var/lock/photondns-adlist.lock
+
+DEFAULT_SOURCE="https://cdn.jsdelivr.net/gh/privacy-protection-tools/anti-AD@master/anti-ad-domains.txt"
+
+[ -f "$LOCK" ] && { echo "another update is already running"; exit 1; }
+touch "$LOCK"
+trap 'rm -f "$LOCK" "$TMP" "$TMP.dl" "$TMP.all"' EXIT
+
+. /lib/functions.sh
+sources=""
+append_source() {
+	sources="$sources $1"
+}
+config_load photondns 2>/dev/null
+config_list_foreach main ad_source append_source
+[ -z "$(echo $sources)" ] && sources="$DEFAULT_SOURCE"
+
+fetch() {
+	url="$1"
+	if command -v curl >/dev/null; then
+		curl -fsSL --max-time 120 -o "$TMP.dl" "$url"
+	else
+		uclient-fetch -q -T 120 -O "$TMP.dl" "$url"
+	fi
+}
+
+: > "$TMP.all"
+got=0
+for url in $sources; do
+	echo "fetching $url"
+	if ! fetch "$url"; then
+		echo "WARNING: failed to fetch $url"
+		continue
+	fi
+	# normalize: strip comments (# ! ;), hosts-format prefixes, *. wildcards
+	sed -e 's/\r$//' -e 's/[#!;].*$//' \
+		-e 's/^0\.0\.0\.0[[:space:]]\{1,\}//' -e 's/^127\.0\.0\.1[[:space:]]\{1,\}//' \
+		-e 's/^\*\.//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' \
+		"$TMP.dl" | grep -v '^$' >> "$TMP.all"
+	got=1
+done
+
+[ "$got" -eq 1 ] || { echo "ERROR: no source could be downloaded"; exit 1; }
+
+sort -u "$TMP.all" > "$TMP"
+count=$(wc -l < "$TMP")
+if [ "$count" -lt 1000 ]; then
+	echo "ERROR: combined list looks too small ($count entries), keeping old list"
+	exit 1
+fi
+
+mkdir -p /etc/photondns
+mv "$TMP" "$LIST"
+echo "ad list updated: $count domains -> $LIST"
+if [ "$(uci -q get photondns.main.enabled)" = "1" ] && pidof photondns >/dev/null; then
+	/etc/init.d/photondns restart
+	echo "photondns restarted"
+fi
+exit 0

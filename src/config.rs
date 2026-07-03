@@ -87,6 +87,9 @@ pub struct LogCfg {
     /// "" = stdout only
     #[serde(default)]
     pub file: String,
+    /// in-memory query log ring buffer size (0 = disabled)
+    #[serde(default = "default_query_log_size")]
+    pub query_log_size: usize,
 }
 
 #[derive(Debug, Deserialize)]
@@ -123,6 +126,9 @@ pub struct RoutingCfg {
     /// big auto-updated China domain list, merged into the local-domains set
     #[serde(default)]
     pub china_list_file: String,
+    /// auto-updated ad/tracker domain list, merged into the block set
+    #[serde(default)]
+    pub ad_list_file: String,
     /// "from-domain to-domain" pairs, answered with the target's records
     #[serde(default)]
     pub redirect_file: String,
@@ -205,6 +211,9 @@ fn default_api_listen() -> String {
 }
 fn default_log_level() -> String {
     "info".into()
+}
+fn default_query_log_size() -> usize {
+    5000
 }
 fn default_hc_interval() -> u64 {
     10

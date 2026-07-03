@@ -436,6 +436,123 @@ msgstr ""
 msgid "%d domains, updated %s"
 msgstr ""
 
+msgid "Query Log"
+msgstr ""
+
+msgid "Live view of recent DNS queries: which client asked, how each query was answered (cache, hosts, blocked, or the upstream group and server that won the race) and how long it took. Kept in memory only."
+msgstr ""
+
+msgid "Time"
+msgstr ""
+
+msgid "Client"
+msgstr ""
+
+msgid "Domain"
+msgstr ""
+
+msgid "Type"
+msgstr ""
+
+msgid "Route"
+msgstr ""
+
+msgid "Time (ms)"
+msgstr ""
+
+msgid "(no entries)"
+msgstr ""
+
+msgid "Filter by domain / client / route..."
+msgstr ""
+
+msgid "photondns is not running (or the query log is disabled)."
+msgstr ""
+
+msgid "Query log size"
+msgstr ""
+
+msgid "Number of recent queries kept in memory for the Query Log page; 0 disables it"
+msgstr ""
+
+msgid "List Updates"
+msgstr ""
+
+msgid "Manually download or refresh the domain lists, fetched via CN-friendly mirrors. Enable the corresponding features in Basic Settings to use them."
+msgstr ""
+
+msgid "Mainland-China domains routed to the Local-domain DNS group (split DNS). Source: felixonmars/dnsmasq-china-list."
+msgstr ""
+
+msgid "Ad Block Lists"
+msgstr ""
+
+msgid "Advertising / tracker domains answered with NXDOMAIN. Sources are configured in Basic Settings (default: anti-AD)."
+msgstr ""
+
+msgid "Update started in the background."
+msgstr ""
+
+msgid "%s: %d domains."
+msgstr ""
+
+msgid "Ad Block"
+msgstr ""
+
+msgid "Enable DNS ad blocking"
+msgstr ""
+
+msgid "Answer known advertising / tracker domains with NXDOMAIN"
+msgstr ""
+
+msgid "Ad list sources"
+msgstr ""
+
+msgid "Plain domain lists, mosdns domain:/full: lists or hosts-format files, one URL per entry"
+msgstr ""
+
+msgid "Ad list status"
+msgstr ""
+
+msgid "not downloaded yet - use the List Updates page to download it"
+msgstr ""
+
+msgid "Auto-update lists"
+msgstr ""
+
+msgid "Refresh the enabled China / ad-block lists on a schedule (cron)"
+msgstr ""
+
+msgid "Update day"
+msgstr ""
+
+msgid "Every day"
+msgstr ""
+
+msgid "Sunday"
+msgstr ""
+
+msgid "Monday"
+msgstr ""
+
+msgid "Tuesday"
+msgstr ""
+
+msgid "Wednesday"
+msgstr ""
+
+msgid "Thursday"
+msgstr ""
+
+msgid "Friday"
+msgstr ""
+
+msgid "Saturday"
+msgstr ""
+
+msgid "Update hour (0-23)"
+msgstr ""
+
 msgid "AliDNS (UDP 223.5.5.5)"
 msgstr ""
 

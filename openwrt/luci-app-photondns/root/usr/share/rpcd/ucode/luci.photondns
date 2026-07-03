@@ -133,6 +133,60 @@ const methods = {
 		}
 	},
 
+	update_adlist: {
+		call: function() {
+			try {
+				if (stat('/var/lock/photondns-adlist.lock')) {
+					return { success: false, error: 'Another update is already in progress.' };
+				}
+				exec_sys('/usr/bin/photondns-adlist > /var/log/photondns-adlist.log 2>&1 &');
+				return { success: true };
+			} catch (e) {
+				return { success: false, error: String(e) };
+			}
+		}
+	},
+
+	adlist_status: {
+		call: function() {
+			try {
+				let s = stat('/etc/photondns/ad_list.txt');
+				let count = 0;
+				if (s) {
+					let res = exec_sys('wc -l < /etc/photondns/ad_list.txt');
+					count = int(res.stdout) || 0;
+				}
+				let log = '';
+				if (stat('/var/log/photondns-adlist.log')) {
+					log = readfile('/var/log/photondns-adlist.log');
+				}
+				return {
+					exists: s ? true : false,
+					domains: count,
+					mtime: s ? s.mtime : 0,
+					updating: stat('/var/lock/photondns-adlist.lock') ? true : false,
+					log: log
+				};
+			} catch (e) {
+				return { error: String(e) };
+			}
+		}
+	},
+
+	query_log: {
+		call: function() {
+			try {
+				let res = api_get('/log?n=500');
+				if (res.code === 0 && length(res.stdout) > 0) {
+					return { running: true, raw: res.stdout };
+				}
+				return { running: false, raw: "" };
+			} catch (e) {
+				return { running: false, error: String(e) };
+			}
+		}
+	},
+
 	clean_log: {
 		call: function() {
 			try {

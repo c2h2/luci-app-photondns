@@ -70,8 +70,14 @@ Strategies: `race` (default), `fastest`, `parallel`, `sequential`, `random`.
 - Reject HTTPS/SVCB type-65 queries (optional)
 - Built-in protection: `.local`/`.lan`/RFC-6761 special TLDs and private PTR
   zones are answered NXDOMAIN locally instead of leaking upstream
+- **Ad blocking**: auto-downloaded lists (anti-AD, Cats-Team AdRules, hosts
+  files...) answered NXDOMAIN, with a LuCI update page and status
+- **Live query log** in LuCI: last N queries (default 5000, in-memory) with
+  client, domain, route taken (cache/stale/hosts/blocked/local/main),
+  winning upstream and latency, filterable and auto-refreshing
+- **Scheduled auto-update** (cron) for the China and ad lists
 - dnsmasq takeover (`redirect`) and firewall DNS hijack (`dns_hijack`) options
-- HTTP JSON API: `/stats`, `/flush`, `/health`, `/version` (127.0.0.1)
+- HTTP JSON API: `/stats`, `/flush`, `/log`, `/health`, `/version` (127.0.0.1)
 - LuCI app: live status dashboard (upstream health, EWMA latency, hedges,
   cache hit rate), full settings editor, rule file editor, log viewer —
   bilingual (English / 简体中文)

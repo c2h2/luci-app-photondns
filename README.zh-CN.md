@@ -60,8 +60,14 @@ LuCI 管理界面（`luci-app-photondns`，中英双语）。
 - 可选拦截 HTTPS/SVCB type-65 查询
 - 内置防护：`.local`/`.lan` 等 RFC-6761 特殊域名与私网 PTR 反查在本地直接返回
   NXDOMAIN，不再泄漏到上游
+- **广告拦截**：自动下载列表（anti-AD、Cats-Team AdRules、hosts 格式等）并
+  返回 NXDOMAIN，附 LuCI 更新页面与状态显示
+- **实时查询日志**（LuCI）：内存中保留最近 N 条查询（默认 5000），显示客户端、
+  域名、应答路径（缓存/过期/hosts/拦截/local/main）、获胜上游与耗时，可过滤、
+  自动刷新
+- **定时自动更新**（cron）国内域名列表与广告列表
 - dnsmasq 接管（`redirect`）与防火墙 DNS 劫持（`dns_hijack`）选项
-- HTTP JSON API：`/stats`、`/flush`、`/health`、`/version`（仅 127.0.0.1）
+- HTTP JSON API：`/stats`、`/flush`、`/log`、`/health`、`/version`（仅 127.0.0.1）
 - LuCI 界面：实时状态面板（上游健康、EWMA 延迟、对冲次数、缓存命中率）、
   完整设置编辑、规则文件编辑、日志查看，中英双语
 

@@ -100,6 +100,23 @@ pub async fn run(ctx: Arc<Ctx>, listen: String) -> Result<()> {
                 };
                 let req = String::from_utf8_lossy(&buf[..n]);
                 let path = req.split_whitespace().nth(1).unwrap_or("/");
+                if path == "/log" || path.starts_with("/log?") {
+                    let n = path
+                        .split_once("n=")
+                        .and_then(|(_, v)| {
+                            v.split(&['&', ' '][..]).next().and_then(|x| x.parse::<usize>().ok())
+                        })
+                        .unwrap_or(500)
+                        .min(5000);
+                    let body = json!({ "entries": ctx.qlog.snapshot(n) }).to_string();
+                    let resp = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                        body.len(),
+                        body
+                    );
+                    let _ = stream.write_all(resp.as_bytes()).await;
+                    return;
+                }
                 let (status, body) = match path {
                     "/stats" | "/" => ("200 OK", stats_json(&ctx).to_string()),
                     "/health" => ("200 OK", json!({"status": "ok"}).to_string()),

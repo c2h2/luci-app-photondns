@@ -4,17 +4,24 @@
 'require ui';
 'require view';
 
-const callUpdateChinaList = rpc.declare({
-	object: 'luci.photondns',
-	method: 'update_chinalist',
-	expect: { '': {} }
-});
-
-const callChinaListStatus = rpc.declare({
-	object: 'luci.photondns',
-	method: 'chinalist_status',
-	expect: { '': {} }
-});
+const LISTS = [
+	{
+		key: 'chinalist',
+		title: _('China Domain List'),
+		descr: _('Mainland-China domains routed to the Local-domain DNS group (split DNS). Source: felixonmars/dnsmasq-china-list.'),
+		file: '/etc/photondns/china_list.txt',
+		update: rpc.declare({ object: 'luci.photondns', method: 'update_chinalist', expect: { '': {} } }),
+		status: rpc.declare({ object: 'luci.photondns', method: 'chinalist_status', expect: { '': {} } })
+	},
+	{
+		key: 'adlist',
+		title: _('Ad Block Lists'),
+		descr: _('Advertising / tracker domains answered with NXDOMAIN. Sources are configured in Basic Settings (default: anti-AD).'),
+		file: '/etc/photondns/ad_list.txt',
+		update: rpc.declare({ object: 'luci.photondns', method: 'update_adlist', expect: { '': {} } }),
+		status: rpc.declare({ object: 'luci.photondns', method: 'adlist_status', expect: { '': {} } })
+	}
+];
 
 function statusText(st) {
 	if (st && st.updating)
@@ -27,75 +34,80 @@ function statusText(st) {
 
 return view.extend({
 	load() {
-		return L.resolveDefault(callChinaListStatus(), {});
+		return Promise.all(LISTS.map(l => L.resolveDefault(l.status(), {})));
 	},
 
-	refresh() {
-		return L.resolveDefault(callChinaListStatus(), {}).then(st => {
-			const s = document.getElementById('chinalist_status');
+	refresh(list) {
+		return L.resolveDefault(list.status(), {}).then(st => {
+			const s = document.getElementById(list.key + '_status');
 			if (s) {
 				s.innerHTML = '';
 				s.appendChild(statusText(st));
 			}
-			const pre = document.getElementById('chinalist_log');
-			if (pre && typeof st.log === 'string' && st.log.trim() !== '')
+			const pre = document.getElementById(list.key + '_log');
+			if (pre && st && typeof st.log === 'string' && st.log.trim() !== '')
 				pre.textContent = st.log;
-			const btn = document.getElementById('chinalist_btn');
-			if (btn) btn.disabled = !!st.updating;
+			const btn = document.getElementById(list.key + '_btn');
+			if (btn) btn.disabled = !!(st && st.updating);
 			return st;
 		});
 	},
 
-	handleUpdate() {
-		return callUpdateChinaList().then(res => {
+	handleUpdate(list) {
+		return list.update().then(res => {
 			if (!res || !res.success) {
 				ui.addNotification(null, E('p', _('Update failed to start: %s')
 					.format((res && res.error) || '?')), 'error');
 				return;
 			}
-			ui.addNotification(null, E('p', _('China list update started in the background.')), 'info');
-			const tick = () => this.refresh().then(st => {
+			ui.addNotification(null, E('p', _('Update started in the background.')), 'info');
+			const tick = () => this.refresh(list).then(st => {
 				if (st && !st.updating) {
 					poll.remove(tick);
 					ui.addNotification(null, E('p',
-						_('China list: %d domains.').format(st.domains || 0)), 'info');
+						_('%s: %d domains.').format(list.title, (st && st.domains) || 0)), 'info');
 				}
 			});
 			poll.add(tick, 2);
 		});
 	},
 
-	render(st) {
+	renderList(list, st) {
+		return E('div', { class: 'cbi-section' }, [
+			E('h3', {}, list.title),
+			E('div', { class: 'cbi-section-descr' }, list.descr),
+			E('table', { class: 'table' }, [
+				E('tr', { class: 'tr' }, [
+					E('td', { class: 'td left', style: 'width:220px; opacity:.7' }, _('Current list')),
+					E('td', { class: 'td left', id: list.key + '_status' }, statusText(st))
+				]),
+				E('tr', { class: 'tr' }, [
+					E('td', { class: 'td left', style: 'opacity:.7' }, _('List file')),
+					E('td', { class: 'td left' }, list.file)
+				])
+			]),
+			E('div', { style: 'margin:12px 0' }, [
+				E('button', {
+					id: list.key + '_btn',
+					class: 'btn cbi-button-apply',
+					disabled: st && st.updating ? true : null,
+					click: ui.createHandlerFn(this, 'handleUpdate', list)
+				}, _('Update Now'))
+			]),
+			E('pre', {
+				id: list.key + '_log',
+				style: 'max-height:200px; overflow-y:auto; white-space:pre-wrap; ' +
+					'padding:8px; border:1px solid rgba(128,128,128,.35); border-radius:6px'
+			}, (st && st.log && st.log.trim() !== '') ? st.log : _('(empty)'))
+		]);
+	},
+
+	render(data) {
 		return E('div', { class: 'cbi-map' }, [
-			E('h2', {}, _('China Domain List')),
+			E('h2', {}, _('List Updates')),
 			E('div', { class: 'cbi-map-descr' },
-				_('Manually download or update the mainland-China domain list used for split-DNS routing. Source: felixonmars/dnsmasq-china-list, fetched via CN-friendly mirrors. Enable "China domain list (split DNS)" and configure Local-domain DNS servers in Basic Settings to use it.')),
-			E('div', { class: 'cbi-section' }, [
-				E('table', { class: 'table' }, [
-					E('tr', { class: 'tr' }, [
-						E('td', { class: 'td left', style: 'width:220px; opacity:.7' }, _('Current list')),
-						E('td', { class: 'td left', id: 'chinalist_status' }, statusText(st))
-					]),
-					E('tr', { class: 'tr' }, [
-						E('td', { class: 'td left', style: 'opacity:.7' }, _('List file')),
-						E('td', { class: 'td left' }, '/etc/photondns/china_list.txt')
-					])
-				]),
-				E('div', { style: 'margin:12px 0' }, [
-					E('button', {
-						id: 'chinalist_btn',
-						class: 'btn cbi-button-apply',
-						disabled: st && st.updating ? true : null,
-						click: ui.createHandlerFn(this, 'handleUpdate')
-					}, _('Update Now'))
-				]),
-				E('h4', {}, _('Update log')),
-				E('pre', {
-					id: 'chinalist_log',
-					style: 'max-height:400px; overflow-y:auto; white-space:pre-wrap; ' +
-						'padding:8px; border:1px solid rgba(128,128,128,.35); border-radius:6px'
-				}, (st && st.log && st.log.trim() !== '') ? st.log : _('(empty)'))
-			])
+				_('Manually download or refresh the domain lists, fetched via CN-friendly mirrors. Enable the corresponding features in Basic Settings to use them.')),
+			...LISTS.map((l, i) => this.renderList(l, data[i]))
 		]);
 	},
 

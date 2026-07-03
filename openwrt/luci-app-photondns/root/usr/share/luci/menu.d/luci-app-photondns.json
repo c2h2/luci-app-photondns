@@ -18,6 +18,14 @@
 			"path": "photondns/status"
 		}
 	},
+	"admin/services/photondns/querylog": {
+		"title": "Query Log",
+		"order": 7,
+		"action": {
+			"type": "view",
+			"path": "photondns/querylog"
+		}
+	},
 	"admin/services/photondns/basic": {
 		"title": "Basic Settings",
 		"order": 10,
@@ -35,7 +43,7 @@
 		}
 	},
 	"admin/services/photondns/chinalist": {
-		"title": "China List",
+		"title": "List Updates",
 		"order": 17,
 		"action": {
 			"type": "view",

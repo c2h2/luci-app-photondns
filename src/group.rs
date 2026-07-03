@@ -148,7 +148,8 @@ impl Group {
         }
     }
 
-    pub async fn resolve(&self, query: &[u8], stats: &Stats) -> Result<Vec<u8>> {
+    /// Resolve and return (response, winning upstream address).
+    pub async fn resolve(&self, query: &[u8], stats: &Stats) -> Result<(Vec<u8>, String)> {
         self.queries.fetch_add(1, Ordering::Relaxed);
         let cands = self.candidates();
         if cands.is_empty() {
@@ -167,7 +168,10 @@ impl Group {
                 let per_attempt = (Instant::now() + self.timeout).min(overall_deadline);
                 let (ft, rt, cd) = (self.fail_threshold, self.recover_threshold, self.cooldown);
                 inflight.push(async move {
-                    u.query_measured(&q, per_attempt, ft, rt, cd).await
+                    let addr = u.addr_str.clone();
+                    u.query_measured(&q, per_attempt, ft, rt, cd)
+                        .await
+                        .map(|resp| (resp, addr))
                 });
                 *next += 1;
                 true
@@ -183,7 +187,7 @@ impl Group {
                 biased;
                 res = inflight.next() => {
                     match res {
-                        Some(Ok(resp)) => return Ok(resp),
+                        Some(Ok(win)) => return Ok(win),
                         Some(Err(e)) => {
                             last_err = Some(e);
                             // a failed attempt immediately triggers the next hedge

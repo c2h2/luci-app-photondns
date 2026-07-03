@@ -439,6 +439,123 @@ msgstr "尚未下载——请前往\"国内域名列表\"页面下载"
 msgid "%d domains, updated %s"
 msgstr "%d 个域名，更新于 %s"
 
+msgid "Query Log"
+msgstr "查询日志"
+
+msgid "Live view of recent DNS queries: which client asked, how each query was answered (cache, hosts, blocked, or the upstream group and server that won the race) and how long it took. Kept in memory only."
+msgstr "实时查看最近的 DNS 查询：哪个客户端发起、如何应答（缓存、hosts、拦截，或竞速获胜的上游分组与服务器）以及耗时。仅保存在内存中。"
+
+msgid "Time"
+msgstr "时间"
+
+msgid "Client"
+msgstr "客户端"
+
+msgid "Domain"
+msgstr "域名"
+
+msgid "Type"
+msgstr "类型"
+
+msgid "Route"
+msgstr "路由"
+
+msgid "Time (ms)"
+msgstr "耗时（毫秒）"
+
+msgid "(no entries)"
+msgstr "（无记录）"
+
+msgid "Filter by domain / client / route..."
+msgstr "按域名 / 客户端 / 路由过滤..."
+
+msgid "photondns is not running (or the query log is disabled)."
+msgstr "photondns 未运行（或查询日志已禁用）。"
+
+msgid "Query log size"
+msgstr "查询日志条数"
+
+msgid "Number of recent queries kept in memory for the Query Log page; 0 disables it"
+msgstr "内存中保留的最近查询数量，供查询日志页面使用；0 表示禁用"
+
+msgid "List Updates"
+msgstr "列表更新"
+
+msgid "Manually download or refresh the domain lists, fetched via CN-friendly mirrors. Enable the corresponding features in Basic Settings to use them."
+msgstr "手动下载或更新域名列表（优先使用国内镜像）。需在基本设置中启用对应功能后生效。"
+
+msgid "Mainland-China domains routed to the Local-domain DNS group (split DNS). Source: felixonmars/dnsmasq-china-list."
+msgstr "路由到本地域名 DNS 分组的中国大陆域名（分流解析）。数据源：felixonmars/dnsmasq-china-list。"
+
+msgid "Ad Block Lists"
+msgstr "广告拦截列表"
+
+msgid "Advertising / tracker domains answered with NXDOMAIN. Sources are configured in Basic Settings (default: anti-AD)."
+msgstr "对广告 / 跟踪域名返回 NXDOMAIN。数据源在基本设置中配置（默认：anti-AD）。"
+
+msgid "Update started in the background."
+msgstr "更新已在后台开始。"
+
+msgid "%s: %d domains."
+msgstr "%s：%d 个域名。"
+
+msgid "Ad Block"
+msgstr "广告拦截"
+
+msgid "Enable DNS ad blocking"
+msgstr "启用 DNS 广告拦截"
+
+msgid "Answer known advertising / tracker domains with NXDOMAIN"
+msgstr "对已知广告 / 跟踪域名返回 NXDOMAIN"
+
+msgid "Ad list sources"
+msgstr "广告列表数据源"
+
+msgid "Plain domain lists, mosdns domain:/full: lists or hosts-format files, one URL per entry"
+msgstr "支持纯域名列表、mosdns domain:/full: 格式列表或 hosts 格式文件，每条一个 URL"
+
+msgid "Ad list status"
+msgstr "广告列表状态"
+
+msgid "not downloaded yet - use the List Updates page to download it"
+msgstr "尚未下载——请前往\"列表更新\"页面下载"
+
+msgid "Auto-update lists"
+msgstr "自动更新列表"
+
+msgid "Refresh the enabled China / ad-block lists on a schedule (cron)"
+msgstr "按计划（cron）自动刷新已启用的国内域名 / 广告拦截列表"
+
+msgid "Update day"
+msgstr "更新日"
+
+msgid "Every day"
+msgstr "每天"
+
+msgid "Sunday"
+msgstr "周日"
+
+msgid "Monday"
+msgstr "周一"
+
+msgid "Tuesday"
+msgstr "周二"
+
+msgid "Wednesday"
+msgstr "周三"
+
+msgid "Thursday"
+msgstr "周四"
+
+msgid "Friday"
+msgstr "周五"
+
+msgid "Saturday"
+msgstr "周六"
+
+msgid "Update hour (0-23)"
+msgstr "更新时间（0-23 点）"
+
 msgid "AliDNS (UDP 223.5.5.5)"
 msgstr "阿里 DNS（UDP 223.5.5.5）"
 
