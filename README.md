@@ -93,7 +93,7 @@ cargo zigbuild --release --target aarch64-unknown-linux-musl   # OpenWrt aarch64
 ```sh
 ./deploy.sh root@192.168.1.1
 ssh root@192.168.1.1 'uci set photondns.main.enabled=1; uci commit photondns; /etc/init.d/photondns restart'
-dig @192.168.1.1 -p 5335 example.com
+dig @192.168.1.1 -p 15533 example.com
 ```
 
 Then open LuCI → Services → photondns. To make it the system resolver, enable
@@ -109,7 +109,7 @@ hand-written TOML file (`photondns -c config.toml`, `-t` to validate):
 
 ```toml
 [server]
-listen = ["0.0.0.0:5335"]
+listen = ["0.0.0.0:15533"]
 
 [cache]
 size = 8192          # entries (the headline knob)

@@ -72,7 +72,7 @@ return view.extend({
 
 		o = s.taboption('basic', form.Value, 'listen_port', _('Listen Port'));
 		o.datatype = 'port';
-		o.default = '5335';
+		o.default = '15533';
 
 		o = s.taboption('basic', form.ListValue, 'log_level', _('Log Level'));
 		o.value('debug', _('Debug'));

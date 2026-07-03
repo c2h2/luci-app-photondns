@@ -167,8 +167,8 @@ pub struct GroupCfg {
 }
 
 fn default_listen() -> Vec<String> {
-    // 5335 (not 5353) to stay clear of unicast mDNS noise
-    vec!["127.0.0.1:5335".into()]
+    // high port, clear of unicast mDNS (5353) noise
+    vec!["127.0.0.1:15533".into()]
 }
 fn default_true() -> bool {
     true

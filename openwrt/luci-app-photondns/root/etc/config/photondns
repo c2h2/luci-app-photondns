@@ -2,7 +2,7 @@
 config photondns 'main'
 	option enabled '0'
 	option listen_address '0.0.0.0'
-	option listen_port '5335'
+	option listen_port '15533'
 	option log_level 'info'
 	option log_file '/var/log/photondns.log'
 	option api_port '8053'

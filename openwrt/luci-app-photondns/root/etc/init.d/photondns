@@ -12,7 +12,7 @@ REDIRECT_LOCK_FILE=/etc/photondns/redirect.lock
 get_config() {
 	config_get enabled $1 enabled 0
 	config_get listen_address $1 listen_address "0.0.0.0"
-	config_get listen_port $1 listen_port 5335
+	config_get listen_port $1 listen_port 15533
 	config_get log_level $1 log_level "info"
 	config_get log_file $1 log_file "/var/log/photondns.log"
 	config_get api_port $1 api_port 8053
