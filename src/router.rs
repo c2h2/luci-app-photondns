@@ -144,7 +144,12 @@ impl Router {
             }
         }
         let blocked = DomainSet::load(&cfg.block_file);
-        let local_domains = DomainSet::load(&cfg.local_domains_file);
+        let mut local_domains = DomainSet::load(&cfg.local_domains_file);
+        if !cfg.china_list_file.is_empty() {
+            let china = DomainSet::load(&cfg.china_list_file);
+            local_domains.full.extend(china.full);
+            local_domains.suffix.extend(china.suffix);
+        }
         let mut special = DomainSet::default();
         if cfg.block_special {
             for d in SPECIAL_TLDS {

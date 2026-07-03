@@ -388,6 +388,39 @@ msgstr "日志已清空。"
 msgid "(empty)"
 msgstr "（空）"
 
+msgid "China domain list (split DNS)"
+msgstr "国内域名列表（分流解析）"
+
+msgid "Route mainland-China domains to the Local-domain DNS servers, everything else to the primary servers. Uses the dnsmasq-china-list (~70k domains)."
+msgstr "将中国大陆域名交给本地域名 DNS 服务器解析，其余域名走主 DNS 服务器。使用 dnsmasq-china-list（约 7 万个域名）。"
+
+msgid "China list"
+msgstr "国内域名列表"
+
+msgid "Download or refresh the China domain list (felixonmars/dnsmasq-china-list)"
+msgstr "下载或更新国内域名列表（felixonmars/dnsmasq-china-list）"
+
+msgid "Update China List"
+msgstr "更新国内域名列表"
+
+msgid "Update failed to start: %s"
+msgstr "更新启动失败：%s"
+
+msgid "China list update started in the background."
+msgstr "国内域名列表已开始后台更新。"
+
+msgid "China list: %d domains."
+msgstr "国内域名列表：%d 个域名。"
+
+msgid "China list status"
+msgstr "国内域名列表状态"
+
+msgid "not downloaded yet - click Update China List"
+msgstr "尚未下载——请点击\"更新国内域名列表\""
+
+msgid "%d domains, updated %s"
+msgstr "%d 个域名，更新于 %s"
+
 msgid "AliDNS (UDP 223.5.5.5)"
 msgstr "阿里 DNS（UDP 223.5.5.5）"
 

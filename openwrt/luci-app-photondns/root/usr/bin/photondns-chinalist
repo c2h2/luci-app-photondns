@@ -1,0 +1,50 @@
+#!/bin/sh
+# Download/update the China domain list for photondns split-DNS routing.
+# Source: felixonmars/dnsmasq-china-list (accelerated-domains.china.conf),
+# fetched via CN-friendly mirrors first.
+
+LIST=/etc/photondns/china_list.txt
+TMP=/tmp/photondns-chinalist.$$
+LOCK=/var/lock/photondns-chinalist.lock
+
+URLS="
+https://cdn.jsdelivr.net/gh/felixonmars/dnsmasq-china-list@master/accelerated-domains.china.conf
+https://fastly.jsdelivr.net/gh/felixonmars/dnsmasq-china-list@master/accelerated-domains.china.conf
+https://raw.githubusercontent.com/felixonmars/dnsmasq-china-list/master/accelerated-domains.china.conf
+"
+
+[ -f "$LOCK" ] && { echo "another update is already running"; exit 1; }
+touch "$LOCK"
+trap 'rm -f "$LOCK" "$TMP" "$TMP.conf"' EXIT
+
+fetch() {
+	url="$1"
+	if command -v curl >/dev/null; then
+		curl -fsSL --max-time 90 -o "$TMP.conf" "$url"
+	else
+		uclient-fetch -q -T 90 -O "$TMP.conf" "$url"
+	fi
+}
+
+for url in $URLS; do
+	echo "fetching $url"
+	if fetch "$url"; then
+		# server=/domain.cn/114.114.114.114 -> domain.cn
+		sed -n 's|^server=/\([^/]*\)/.*|\1|p' "$TMP.conf" > "$TMP"
+		count=$(wc -l < "$TMP")
+		if [ "$count" -gt 10000 ]; then
+			mkdir -p /etc/photondns
+			mv "$TMP" "$LIST"
+			echo "china list updated: $count domains -> $LIST"
+			if [ "$(uci -q get photondns.main.enabled)" = "1" ] && pidof photondns >/dev/null; then
+				/etc/init.d/photondns restart
+				echo "photondns restarted"
+			fi
+			exit 0
+		fi
+		echo "downloaded list looks too small ($count lines), trying next mirror"
+	fi
+done
+
+echo "ERROR: could not download the china list from any mirror"
+exit 1

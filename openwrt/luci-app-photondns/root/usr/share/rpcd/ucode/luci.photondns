@@ -93,6 +93,46 @@ const methods = {
 		}
 	},
 
+	update_chinalist: {
+		call: function() {
+			try {
+				if (stat('/var/lock/photondns-chinalist.lock')) {
+					return { success: false, error: 'Another update is already in progress.' };
+				}
+				exec_sys('/usr/bin/photondns-chinalist > /var/log/photondns-chinalist.log 2>&1 &');
+				return { success: true };
+			} catch (e) {
+				return { success: false, error: String(e) };
+			}
+		}
+	},
+
+	chinalist_status: {
+		call: function() {
+			try {
+				let s = stat('/etc/photondns/china_list.txt');
+				let count = 0;
+				if (s) {
+					let res = exec_sys('wc -l < /etc/photondns/china_list.txt');
+					count = int(res.stdout) || 0;
+				}
+				let log = '';
+				if (stat('/var/log/photondns-chinalist.log')) {
+					log = readfile('/var/log/photondns-chinalist.log');
+				}
+				return {
+					exists: s ? true : false,
+					domains: count,
+					mtime: s ? s.mtime : 0,
+					updating: stat('/var/lock/photondns-chinalist.lock') ? true : false,
+					log: log
+				};
+			} catch (e) {
+				return { error: String(e) };
+			}
+		}
+	},
+
 	clean_log: {
 		call: function() {
 			try {

@@ -16,7 +16,9 @@
 					"flush_cache",
 					"get_version",
 					"print_log",
-					"clean_log"
+					"clean_log",
+					"update_chinalist",
+					"chinalist_status"
 				]
 			},
 			"uci": [ "photondns" ]

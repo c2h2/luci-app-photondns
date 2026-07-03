@@ -120,6 +120,9 @@ pub struct RoutingCfg {
     /// domains routed to the "local" group
     #[serde(default)]
     pub local_domains_file: String,
+    /// big auto-updated China domain list, merged into the local-domains set
+    #[serde(default)]
+    pub china_list_file: String,
     /// "from-domain to-domain" pairs, answered with the target's records
     #[serde(default)]
     pub redirect_file: String,

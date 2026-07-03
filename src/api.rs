@@ -35,9 +35,20 @@ fn stats_json(ctx: &Arc<Ctx>) -> serde_json::Value {
             })
         })
         .collect();
+    let groups: Vec<_> = ctx
+        .groups
+        .iter()
+        .map(|g| {
+            json!({
+                "name": g.name,
+                "queries": g.queries.load(Ordering::Relaxed),
+            })
+        })
+        .collect();
     json!({
         "version": env!("CARGO_PKG_VERSION"),
         "uptime": s.uptime(),
+        "groups": groups,
         "queries": {
             "total": s.total.load(Ordering::Relaxed),
             "udp": s.udp.load(Ordering::Relaxed),

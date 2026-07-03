@@ -48,6 +48,8 @@ pub struct Group {
     pub fail_threshold: u32,
     pub recover_threshold: u32,
     pub cooldown: Duration,
+    /// queries routed to this group (visibility for split-DNS setups)
+    pub queries: std::sync::atomic::AtomicU64,
 }
 
 impl Group {
@@ -74,6 +76,7 @@ impl Group {
             fail_threshold: fo.fail_threshold.max(1),
             recover_threshold: fo.recover_threshold.max(1),
             cooldown: Duration::from_secs(fo.cooldown.max(1)),
+            queries: std::sync::atomic::AtomicU64::new(0),
         }))
     }
 
@@ -146,6 +149,7 @@ impl Group {
     }
 
     pub async fn resolve(&self, query: &[u8], stats: &Stats) -> Result<Vec<u8>> {
+        self.queries.fetch_add(1, Ordering::Relaxed);
         let cands = self.candidates();
         if cands.is_empty() {
             bail!("group {}: no upstreams", self.name);

@@ -40,6 +40,7 @@ get_config() {
 	config_get insecure_skip_verify $1 insecure_skip_verify 0
 	config_get idle_timeout $1 idle_timeout 30
 	config_get reject_type65 $1 reject_type65 0
+	config_get china_list $1 china_list 0
 }
 
 append_upstream() {
@@ -69,6 +70,11 @@ generate_config() {
 	local cache_enabled=$(bool_str $cache)
 	local dump_file=""
 	[ "$dump_cache" = "1" ] && dump_file="$RULE_DIR/cache.dump"
+
+	# china list only makes sense with a "local" group to route to
+	local china_list_file=""
+	[ "$china_list" = "1" ] && [ -n "$local_list" ] && [ -f "$RULE_DIR/china_list.txt" ] && \
+		china_list_file="$RULE_DIR/china_list.txt"
 
 	cat > $CONF <<-EOF
 	# generated from /etc/config/photondns - do not edit
@@ -106,6 +112,7 @@ generate_config() {
 	hosts_file = "$RULE_DIR/hosts.txt"
 	block_file = "$RULE_DIR/block.txt"
 	local_domains_file = "$RULE_DIR/local_domains.txt"
+	china_list_file = "$china_list_file"
 	redirect_file = "$RULE_DIR/redirect.txt"
 	reject_type65 = $(bool_str $reject_type65)
 

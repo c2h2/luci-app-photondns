@@ -385,6 +385,39 @@ msgstr ""
 msgid "(empty)"
 msgstr ""
 
+msgid "China domain list (split DNS)"
+msgstr ""
+
+msgid "Route mainland-China domains to the Local-domain DNS servers, everything else to the primary servers. Uses the dnsmasq-china-list (~70k domains)."
+msgstr ""
+
+msgid "China list"
+msgstr ""
+
+msgid "Download or refresh the China domain list (felixonmars/dnsmasq-china-list)"
+msgstr ""
+
+msgid "Update China List"
+msgstr ""
+
+msgid "Update failed to start: %s"
+msgstr ""
+
+msgid "China list update started in the background."
+msgstr ""
+
+msgid "China list: %d domains."
+msgstr ""
+
+msgid "China list status"
+msgstr ""
+
+msgid "not downloaded yet - click Update China List"
+msgstr ""
+
+msgid "%d domains, updated %s"
+msgstr ""
+
 msgid "AliDNS (UDP 223.5.5.5)"
 msgstr ""
 

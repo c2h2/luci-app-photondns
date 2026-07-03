@@ -62,7 +62,11 @@ Strategies: `race` (default), `fastest`, `parallel`, `sequential`, `random`.
 - **Serve-stale** (lazy cache) + **prefetch** of popular entries before expiry
 - **Cache persistence** across restarts (periodic + on shutdown)
 - Rule files: hosts, block list (NXDOMAIN), redirect, local-domain routing to
-  a separate "local" upstream group (China-DNS style split)
+  a separate "local" upstream group
+- **China / non-China split DNS**: one click downloads the
+  dnsmasq-china-list (~110k domains, CN-friendly mirrors); mainland domains
+  resolve via your Local-domain DNS group, everything else via the primary
+  group — per-group query counters in `/stats` show the split live
 - Reject HTTPS/SVCB type-65 queries (optional)
 - Built-in protection: `.local`/`.lan`/RFC-6761 special TLDs and private PTR
   zones are answered NXDOMAIN locally instead of leaking upstream
