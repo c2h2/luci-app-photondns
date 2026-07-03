@@ -394,14 +394,32 @@ msgstr "国内域名列表（分流解析）"
 msgid "Route mainland-China domains to the Local-domain DNS servers, everything else to the primary servers. Uses the dnsmasq-china-list (~70k domains)."
 msgstr "将中国大陆域名交给本地域名 DNS 服务器解析，其余域名走主 DNS 服务器。使用 dnsmasq-china-list（约 7 万个域名）。"
 
-msgid "China list"
+msgid "China List"
 msgstr "国内域名列表"
 
-msgid "Download or refresh the China domain list (felixonmars/dnsmasq-china-list)"
-msgstr "下载或更新国内域名列表（felixonmars/dnsmasq-china-list）"
+msgid "China Domain List"
+msgstr "国内域名列表"
 
-msgid "Update China List"
-msgstr "更新国内域名列表"
+msgid "Manually download or update the mainland-China domain list used for split-DNS routing. Source: felixonmars/dnsmasq-china-list, fetched via CN-friendly mirrors. Enable \"China domain list (split DNS)\" and configure Local-domain DNS servers in Basic Settings to use it."
+msgstr "手动下载或更新用于分流解析的中国大陆域名列表。数据源：felixonmars/dnsmasq-china-list，优先使用国内镜像。需在基本设置中启用\"国内域名列表（分流解析）\"并配置本地域名 DNS 服务器。"
+
+msgid "Current list"
+msgstr "当前列表"
+
+msgid "List file"
+msgstr "列表文件"
+
+msgid "Update Now"
+msgstr "立即更新"
+
+msgid "Updating..."
+msgstr "正在更新..."
+
+msgid "Update log"
+msgstr "更新日志"
+
+msgid "not downloaded yet"
+msgstr "尚未下载"
 
 msgid "Update failed to start: %s"
 msgstr "更新启动失败：%s"
@@ -415,8 +433,8 @@ msgstr "国内域名列表：%d 个域名。"
 msgid "China list status"
 msgstr "国内域名列表状态"
 
-msgid "not downloaded yet - click Update China List"
-msgstr "尚未下载——请点击\"更新国内域名列表\""
+msgid "not downloaded yet - use the China List page to download it"
+msgstr "尚未下载——请前往\"国内域名列表\"页面下载"
 
 msgid "%d domains, updated %s"
 msgstr "%d 个域名，更新于 %s"

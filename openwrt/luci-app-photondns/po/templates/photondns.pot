@@ -391,13 +391,31 @@ msgstr ""
 msgid "Route mainland-China domains to the Local-domain DNS servers, everything else to the primary servers. Uses the dnsmasq-china-list (~70k domains)."
 msgstr ""
 
-msgid "China list"
+msgid "China List"
 msgstr ""
 
-msgid "Download or refresh the China domain list (felixonmars/dnsmasq-china-list)"
+msgid "China Domain List"
 msgstr ""
 
-msgid "Update China List"
+msgid "Manually download or update the mainland-China domain list used for split-DNS routing. Source: felixonmars/dnsmasq-china-list, fetched via CN-friendly mirrors. Enable \"China domain list (split DNS)\" and configure Local-domain DNS servers in Basic Settings to use it."
+msgstr ""
+
+msgid "Current list"
+msgstr ""
+
+msgid "List file"
+msgstr ""
+
+msgid "Update Now"
+msgstr ""
+
+msgid "Updating..."
+msgstr ""
+
+msgid "Update log"
+msgstr ""
+
+msgid "not downloaded yet"
 msgstr ""
 
 msgid "Update failed to start: %s"
@@ -412,7 +430,7 @@ msgstr ""
 msgid "China list status"
 msgstr ""
 
-msgid "not downloaded yet - click Update China List"
+msgid "not downloaded yet - use the China List page to download it"
 msgstr ""
 
 msgid "%d domains, updated %s"

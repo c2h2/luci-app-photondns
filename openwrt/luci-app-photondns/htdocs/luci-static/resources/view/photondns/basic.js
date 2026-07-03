@@ -30,12 +30,6 @@ function renderStatus(isRunning) {
 		: spanTemp.format('red', _('photondns'), _('NOT RUNNING'));
 }
 
-const callUpdateChinaList = rpc.declare({
-	object: 'luci.photondns',
-	method: 'update_chinalist',
-	expect: { '': {} }
-});
-
 const callChinaListStatus = rpc.declare({
 	object: 'luci.photondns',
 	method: 'chinalist_status',
@@ -146,34 +140,11 @@ return view.extend({
 		o.default = false;
 		o.depends({ local_upstream: /./ });
 
-		o = s.taboption('upstream', form.Button, '_update_chinalist', _('China list'),
-			_('Download or refresh the China domain list (felixonmars/dnsmasq-china-list)'));
-		o.inputtitle = _('Update China List');
-		o.inputstyle = 'apply';
-		o.depends('china_list', '1');
-		o.onclick = () => {
-			return callUpdateChinaList().then(res => {
-				if (!res || !res.success) {
-					ui.addNotification(null, E('p', _('Update failed to start: %s').format((res && res.error) || '?')), 'error');
-					return;
-				}
-				ui.addNotification(null, E('p', _('China list update started in the background.')), 'info');
-				const check = () => L.resolveDefault(callChinaListStatus(), {}).then(st => {
-					if (st && !st.updating) {
-						poll.remove(check);
-						ui.addNotification(null, E('p',
-							_('China list: %d domains.').format(st.domains || 0)), 'info');
-					}
-				});
-				poll.add(check, 3);
-			});
-		};
-
 		o = s.taboption('upstream', form.DummyValue, '_chinalist_status', _('China list status'));
 		o.depends('china_list', '1');
 		o.cfgvalue = () => L.resolveDefault(callChinaListStatus(), {}).then(st => {
 			if (!st || !st.exists)
-				return _('not downloaded yet - click Update China List');
+				return _('not downloaded yet - use the China List page to download it');
 			return _('%d domains, updated %s').format(st.domains,
 				new Date(st.mtime * 1000).toLocaleString());
 		});
