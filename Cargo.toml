@@ -13,6 +13,10 @@ path = "src/main.rs"
 name = "photonbench"
 path = "src/bin/photonbench.rs"
 
+[[bin]]
+name = "photonrbench"
+path = "src/bin/photonrbench.rs"
+
 [dependencies]
 anyhow = "1"
 futures = { version = "0.3", default-features = false, features = ["std"] }

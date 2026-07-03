@@ -9,6 +9,7 @@ SCP="scp -i $HOME/.ssh/id_rsa -O"
 DIR="$(cd "$(dirname "$0")" && pwd)"
 BIN="$DIR/target/aarch64-unknown-linux-musl/release/photondns"
 BENCH="$DIR/target/aarch64-unknown-linux-musl/release/photonbench"
+RBENCH="$DIR/target/aarch64-unknown-linux-musl/release/photonrbench"
 APP="$DIR/openwrt/luci-app-photondns"
 
 [ -f "$BIN" ] || { echo "binary missing - run: cargo zigbuild --release --target aarch64-unknown-linux-musl"; exit 1; }
@@ -17,6 +18,7 @@ echo "==> copying files to $HOST"
 $SSH "$HOST" "mkdir -p /usr/share/rpcd/ucode /usr/share/rpcd/acl.d /usr/share/luci/menu.d /usr/share/ucitrack /www/luci-static/resources/view/photondns /etc/photondns; /etc/init.d/photondns stop 2>/dev/null; true"
 $SCP "$BIN" "$HOST:/usr/bin/photondns"
 [ -f "$BENCH" ] && $SCP "$BENCH" "$HOST:/usr/bin/photonbench"
+[ -f "$RBENCH" ] && $SCP "$RBENCH" "$HOST:/usr/bin/photonrbench"
 $SCP "$APP/root/etc/init.d/photondns" "$HOST:/etc/init.d/photondns"
 $SCP "$APP/root/usr/bin/photondns-chinalist" "$HOST:/usr/bin/photondns-chinalist"
 $SCP "$APP/root/usr/bin/photondns-adlist" "$HOST:/usr/bin/photondns-adlist"
@@ -40,6 +42,7 @@ $SSH "$HOST" sh <<'EOF'
 set -e
 chmod +x /usr/bin/photondns /usr/bin/photondns-chinalist /usr/bin/photondns-adlist /etc/init.d/photondns /usr/share/rpcd/ucode/luci.photondns
 [ -f /usr/bin/photonbench ] && chmod +x /usr/bin/photonbench
+[ -f /usr/bin/photonrbench ] && chmod +x /usr/bin/photonrbench
 # seed uci config only if absent (preserve user settings on redeploy)
 if [ ! -f /etc/config/photondns ]; then
 	touch /etc/config/photondns

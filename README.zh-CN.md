@@ -75,13 +75,31 @@ LuCI 管理界面（`luci-app-photondns`，中英双语）。
 
 ```
 src/                    Rust 源码（服务、缓存、上游、故障转移、路由、API）
-src/bin/photonbench.rs    轻量 UDP DNS 压测工具
+src/bin/photonbench.rs    单域名 UDP DNS 压测工具
+src/bin/photonrbench.rs   随机并发压测工具（每次生成 1000 个随机域名）
 openwrt/photondns/        OpenWrt 软件包 Makefile（SDK 构建）
 openwrt/luci-app-photondns/  LuCI 应用：视图、rpcd ucode 后端、ACL、菜单、
                         UCI 配置 + 生成 TOML 的 procd init 脚本、po 翻译
 tools/po2lmo.py         po -> lmo 编译器（直接部署用）
+test_dns.sh             基于 dig/nslookup 的详细测试脚本（含耗时与路由信息）
 deploy.sh               通过 SSH 直接部署到设备
 ```
+
+## 性能测试
+
+`photonrbench` 每次运行生成一批随机域名（因此冷启动阶段全部为缓存未命中，
+可测试真实的上游/故障转移路径），通过并行工作线程池发起查询，再用相同域名
+执行热查询以测量纯缓存服务速度。输出吞吐量与 p50/p90/p99 延迟。
+
+```sh
+photonrbench [服务器:端口] [数量] [并发]   # 默认 127.0.0.1:15533 1000 50
+#   环境变量：SUFFIX=<域名>（追加真实后缀）  WARM=0（跳过热查询阶段）
+#            SEED=<n>（可复现的域名集合，用于 A/B 对比）
+```
+
+在 photonicat2 上（本机回环，无网络开销）热查询约 **55,000 qps，
+p50 0.5 ms / p99 3 ms**；冷启动阶段受上游 WAN 往返时间限制——这正是重点，
+测量的是转发器本身而非空转循环。
 
 ## 构建
 
