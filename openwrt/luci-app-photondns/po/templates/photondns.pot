@@ -1,0 +1,416 @@
+msgid ""
+msgstr "Content-Type: text/plain; charset=UTF-8"
+
+msgid "photondns"
+msgstr ""
+
+msgid "Status"
+msgstr ""
+
+msgid "Basic Settings"
+msgstr ""
+
+msgid "Rules"
+msgstr ""
+
+msgid "Logs"
+msgstr ""
+
+msgid "photondns Status"
+msgstr ""
+
+msgid "photondns Rules"
+msgstr ""
+
+msgid "photondns Logs"
+msgstr ""
+
+msgid "High-performance Rust DNS forwarder with caching and adaptive multi-path failover."
+msgstr ""
+
+msgid "High-performance DNS forwarder written in Rust: configurable cache, serve-stale, prefetch, and adaptive failover that races multiple upstreams (UDP/TCP/DoT/DoH) and takes the fastest answer."
+msgstr ""
+
+msgid "RUNNING"
+msgstr ""
+
+msgid "NOT RUNNING"
+msgstr ""
+
+msgid "Collecting data..."
+msgstr ""
+
+msgid "photondns is not running (or the API is unreachable). Enable and start it from Basic Settings."
+msgstr ""
+
+msgid "Service"
+msgstr ""
+
+msgid "Version"
+msgstr ""
+
+msgid "Uptime"
+msgstr ""
+
+msgid "Queries/min"
+msgstr ""
+
+msgid "Queries"
+msgstr ""
+
+msgid "Total"
+msgstr ""
+
+msgid "UDP / TCP"
+msgstr ""
+
+msgid "Blocked"
+msgstr ""
+
+msgid "Hosts / Redirected"
+msgstr ""
+
+msgid "Hedged (failover races)"
+msgstr ""
+
+msgid "SERVFAIL"
+msgstr ""
+
+msgid "Cache"
+msgstr ""
+
+msgid "Entries"
+msgstr ""
+
+msgid "Hit rate"
+msgstr ""
+
+msgid "Hits / Misses"
+msgstr ""
+
+msgid "Stale served"
+msgstr ""
+
+msgid "Prefetches"
+msgstr ""
+
+msgid "Evictions"
+msgstr ""
+
+msgid "Upstream Servers"
+msgstr ""
+
+msgid "Group"
+msgstr ""
+
+msgid "Upstream"
+msgstr ""
+
+msgid "State"
+msgstr ""
+
+msgid "Latency (EWMA)"
+msgstr ""
+
+msgid "Last RTT"
+msgstr ""
+
+msgid "OK"
+msgstr ""
+
+msgid "Fail"
+msgstr ""
+
+msgid "Outages"
+msgstr ""
+
+msgid "UP"
+msgstr ""
+
+msgid "DOWN"
+msgstr ""
+
+msgid "Flush DNS Cache"
+msgstr ""
+
+msgid "DNS cache flushed."
+msgstr ""
+
+msgid "Flush failed, is photondns running?"
+msgstr ""
+
+msgid "Basic Options"
+msgstr ""
+
+msgid "Upstreams"
+msgstr ""
+
+msgid "Failover"
+msgstr ""
+
+msgid "Enabled"
+msgstr ""
+
+msgid "Listen Address"
+msgstr ""
+
+msgid "Listen Port"
+msgstr ""
+
+msgid "Log Level"
+msgstr ""
+
+msgid "Debug"
+msgstr ""
+
+msgid "Info"
+msgstr ""
+
+msgid "Warning"
+msgstr ""
+
+msgid "Error"
+msgstr ""
+
+msgid "Log File"
+msgstr ""
+
+msgid "API Port"
+msgstr ""
+
+msgid "Local HTTP API for statistics and cache control (127.0.0.1 only)"
+msgstr ""
+
+msgid "DNS Forward"
+msgstr ""
+
+msgid "Forward dnsmasq DNS resolution requests to photondns"
+msgstr ""
+
+msgid "DNS Redirect (Hijack)"
+msgstr ""
+
+msgid "Force redirect all LAN DNS queries (UDP port 53) to photondns via firewall"
+msgstr ""
+
+msgid "Disable RR Type 65 (HTTPS/SVCB)"
+msgstr ""
+
+msgid "Answer HTTPS/SVCB queries with NXDOMAIN, forcing clients onto plain A/AAAA records"
+msgstr ""
+
+msgid "Primary DNS servers"
+msgstr ""
+
+msgid "Formats: 1.2.3.4, udp://host, tcp://host, tls://host (DoT), https://host/dns-query (DoH)"
+msgstr ""
+
+msgid "Backup DNS servers"
+msgstr ""
+
+msgid "Only used when primary servers fail; also raced as a last hedge candidate"
+msgstr ""
+
+msgid "Local-domain DNS servers"
+msgstr ""
+
+msgid "Optional group used for domains listed in the local_domains rule file (e.g. China DNS)"
+msgstr ""
+
+msgid "Bootstrap DNS"
+msgstr ""
+
+msgid "Plain DNS server used to resolve DoT/DoH hostnames"
+msgstr ""
+
+msgid "Disable TLS verification"
+msgstr ""
+
+msgid "Skip DoT/DoH certificate validation (useful if the system clock/CA store is broken)"
+msgstr ""
+
+msgid "Connection idle timeout (s)"
+msgstr ""
+
+msgid "How long pooled TCP/DoT/DoH connections stay open"
+msgstr ""
+
+msgid "Strategy"
+msgstr ""
+
+msgid "race: hedged racing, best latency (recommended). fastest: always lowest-latency upstream. parallel: ask all at once. sequential: strict configured order. random: uniform spread."
+msgstr ""
+
+msgid "race (adaptive hedging)"
+msgstr ""
+
+msgid "fastest (lowest EWMA)"
+msgstr ""
+
+msgid "parallel (all at once)"
+msgstr ""
+
+msgid "sequential (ordered)"
+msgstr ""
+
+msgid "random"
+msgstr ""
+
+msgid "Max hedge delay (ms)"
+msgstr ""
+
+msgid "Upper bound before racing the next upstream; actual delay adapts to ~2x the best upstream latency"
+msgstr ""
+
+msgid "Query timeout (ms)"
+msgstr ""
+
+msgid "Health check interval (s)"
+msgstr ""
+
+msgid "Active probes keep latency stats fresh and detect dead upstreams even when idle"
+msgstr ""
+
+msgid "Health check domain"
+msgstr ""
+
+msgid "Failure threshold"
+msgstr ""
+
+msgid "Consecutive failures before an upstream is taken out of rotation"
+msgstr ""
+
+msgid "Recovery threshold"
+msgstr ""
+
+msgid "Consecutive successes before a down upstream is restored"
+msgstr ""
+
+msgid "Cooldown (s)"
+msgstr ""
+
+msgid "How long a down upstream is excluded before a half-open retry"
+msgstr ""
+
+msgid "Enable DNS cache"
+msgstr ""
+
+msgid "Cache size (entries)"
+msgstr ""
+
+msgid "Maximum number of cached responses (sharded LRU)"
+msgstr ""
+
+msgid "Minimum TTL (s)"
+msgstr ""
+
+msgid "Raise very low TTLs to this value; 0 = no change"
+msgstr ""
+
+msgid "Maximum TTL (s)"
+msgstr ""
+
+msgid "Cap TTLs at this value; 0 = no cap"
+msgstr ""
+
+msgid "Negative cache TTL (s)"
+msgstr ""
+
+msgid "How long NXDOMAIN / empty answers are cached"
+msgstr ""
+
+msgid "Serve stale (lazy cache)"
+msgstr ""
+
+msgid "Answer instantly from expired entries and refresh in the background - also keeps DNS working when all upstreams are down"
+msgstr ""
+
+msgid "Stale lifetime (s)"
+msgstr ""
+
+msgid "How long past expiry an entry may still be served"
+msgstr ""
+
+msgid "Prefetch popular entries"
+msgstr ""
+
+msgid "Refresh frequently used entries shortly before they expire, so they never go stale"
+msgstr ""
+
+msgid "Persist cache to disk"
+msgstr ""
+
+msgid "Save the cache on shutdown and periodically; restore it on startup"
+msgstr ""
+
+msgid "Cache save interval (s)"
+msgstr ""
+
+msgid "Rule files are applied on service restart."
+msgstr ""
+
+msgid "Hosts"
+msgstr ""
+
+msgid "Static host records: \"<name> <ip> [ip...]\" per line. Answers A/AAAA locally."
+msgstr ""
+
+msgid "Block List"
+msgstr ""
+
+msgid "Domains answered with NXDOMAIN. \"example.com\" blocks all subdomains, \"full:example.com\" exact only."
+msgstr ""
+
+msgid "Local Domains"
+msgstr ""
+
+msgid "Domains resolved by the \"local\" upstream group (configure Local-domain DNS servers first)."
+msgstr ""
+
+msgid "Redirect"
+msgstr ""
+
+msgid "\"<from-domain> <to-domain>\" per line: answer queries for from-domain with the records of to-domain."
+msgstr ""
+
+msgid "Rules saved and photondns restarted."
+msgstr ""
+
+msgid "Clear Log"
+msgstr ""
+
+msgid "Log cleared."
+msgstr ""
+
+msgid "(empty)"
+msgstr ""
+
+msgid "AliDNS (UDP 223.5.5.5)"
+msgstr ""
+
+msgid "Tencent DNSPod (UDP 119.29.29.29)"
+msgstr ""
+
+msgid "114DNS (UDP)"
+msgstr ""
+
+msgid "AliDNS (DoT)"
+msgstr ""
+
+msgid "DNSPod (DoT)"
+msgstr ""
+
+msgid "AliDNS (DoH)"
+msgstr ""
+
+msgid "Google (DoT)"
+msgstr ""
+
+msgid "Cloudflare (DoT)"
+msgstr ""
+
+msgid "Google (DoH)"
+msgstr ""
+
+msgid "Quad9 (UDP)"
+msgstr ""

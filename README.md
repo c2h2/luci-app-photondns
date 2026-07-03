@@ -1,5 +1,7 @@
 # photondns
 
+**English** | [简体中文](README.zh-CN.md)
+
 High-performance DNS forwarder for OpenWrt, written in Rust. A from-scratch
 reimagining of [mosdns](https://github.com/sbwml/luci-app-mosdns) focused on
 raw speed and **failover that never makes a client wait**, with a full LuCI
@@ -67,7 +69,8 @@ Strategies: `race` (default), `fastest`, `parallel`, `sequential`, `random`.
 - dnsmasq takeover (`redirect`) and firewall DNS hijack (`dns_hijack`) options
 - HTTP JSON API: `/stats`, `/flush`, `/health`, `/version` (127.0.0.1)
 - LuCI app: live status dashboard (upstream health, EWMA latency, hedges,
-  cache hit rate), full settings editor, rule file editor, log viewer
+  cache hit rate), full settings editor, rule file editor, log viewer —
+  bilingual (English / 简体中文)
 
 ## Repository layout
 
@@ -76,7 +79,9 @@ src/                    Rust sources (server, cache, upstreams, failover, router
 src/bin/photonbench.rs    tiny UDP DNS load generator
 openwrt/photondns/        OpenWrt package Makefile (SDK build)
 openwrt/luci-app-photondns/  LuCI app: views, rpcd ucode backend, ACL, menu,
-                        UCI schema + procd init that generates the TOML config
+                        UCI schema + procd init that generates the TOML config,
+                        po translations (zh_Hans)
+tools/po2lmo.py         po -> lmo compiler for direct deployments
 deploy.sh               direct-to-device deployment over SSH
 ```
 

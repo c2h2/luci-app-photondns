@@ -25,6 +25,14 @@ $SCP "$APP/root/usr/share/ucitrack/luci-app-photondns.json" "$HOST:/usr/share/uc
 $SCP "$APP"/htdocs/luci-static/resources/view/photondns/*.js "$HOST:/www/luci-static/resources/view/photondns/"
 $SCP "$APP/root/etc/uci-defaults/40_luci-photondns" "$HOST:/tmp/40_luci-photondns"
 
+# i18n: compile po -> lmo and install (zh-cn)
+if command -v python3 >/dev/null; then
+	python3 "$DIR/tools/po2lmo.py" "$APP/po/zh_Hans/photondns.po" /tmp/photondns.zh-cn.lmo
+	$SSH "$HOST" "mkdir -p /usr/lib/lua/luci/i18n"
+	$SCP /tmp/photondns.zh-cn.lmo "$HOST:/usr/lib/lua/luci/i18n/photondns.zh-cn.lmo"
+	rm -f /tmp/photondns.zh-cn.lmo
+fi
+
 echo "==> installing"
 $SSH "$HOST" sh <<'EOF'
 set -e
