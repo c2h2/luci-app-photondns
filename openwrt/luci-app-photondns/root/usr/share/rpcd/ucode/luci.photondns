@@ -1,0 +1,112 @@
+#!/usr/bin/env ucode
+
+'use strict';
+
+import { popen, writefile, stat, readfile } from 'fs';
+import { cursor } from 'uci';
+
+function exec_sys(cmd) {
+	let p = popen(cmd + " 2>&1", "r");
+	if (!p) return { code: -1, stdout: "" };
+	let stdout = p.read("all");
+	let code = p.close();
+	if (type(stdout) == 'string') {
+		stdout = replace(stdout, /^\s+|\s+$/g, '');
+	}
+	return { code: code, stdout: stdout || "" };
+}
+
+function api_port() {
+	let c = cursor();
+	c.load('photondns');
+	return c.get('photondns', 'main', 'api_port') || '8053';
+}
+
+function api_get(path) {
+	let port = api_port();
+	let url = `http://127.0.0.1:${port}${path}`;
+	let res = exec_sys(`curl -s --max-time 3 '${url}' || uclient-fetch -q -O - -T 3 '${url}'`);
+	return res;
+}
+
+function logfile_path() {
+	let c = cursor();
+	c.load('photondns');
+	return c.get('photondns', 'main', 'log_file') || '/var/log/photondns.log';
+}
+
+const methods = {
+	stats: {
+		call: function() {
+			try {
+				let res = api_get('/stats');
+				if (res.code === 0 && length(res.stdout) > 0) {
+					return { running: true, raw: res.stdout };
+				}
+				return { running: false, raw: "" };
+			} catch (e) {
+				return { running: false, error: String(e) };
+			}
+		}
+	},
+
+	flush_cache: {
+		call: function() {
+			try {
+				let res = api_get('/flush');
+				if (res.code === 0 && length(res.stdout) > 0) {
+					return { success: true, raw: res.stdout };
+				}
+				return { success: false, error: res.stdout };
+			} catch (e) {
+				return { success: false, error: String(e) };
+			}
+		}
+	},
+
+	get_version: {
+		call: function() {
+			let res = exec_sys('photondns -V');
+			if (res.code === 0) {
+				return { version: res.stdout };
+			}
+			return { error: res.stdout };
+		}
+	},
+
+	print_log: {
+		call: function() {
+			try {
+				let path = logfile_path();
+				if (path && stat(path)) {
+					let content = readfile(path);
+					// return at most the last ~200KB to keep the UI snappy
+					if (length(content) > 204800) {
+						content = substr(content, length(content) - 204800);
+					}
+					return { log: content };
+				}
+				return { log: '' };
+			} catch (e) {
+				return { error: String(e) };
+			}
+		}
+	},
+
+	clean_log: {
+		call: function() {
+			try {
+				let path = logfile_path();
+				if (path) {
+					writefile(path, '');
+					return { success: true };
+				}
+				return { error: 'Log file path could not be determined.' };
+			} catch (e) {
+				return { error: String(e) };
+			}
+		}
+	}
+};
+
+return { 'luci.photondns': methods };

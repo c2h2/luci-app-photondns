@@ -1,0 +1,35 @@
+{
+	"luci-app-photondns": {
+		"description": "Grant UCI access for luci-app-photondns",
+		"read": {
+			"file": {
+				"/etc/init.d/photondns": [ "exec" ],
+				"/etc/photondns/*": [ "read" ],
+				"/usr/bin/photondns": [ "exec" ],
+				"/var/log/*": [ "read" ]
+			},
+			"ubus": {
+				"file": [ "read" ],
+				"service": [ "list" ],
+				"luci.photondns": [
+					"stats",
+					"flush_cache",
+					"get_version",
+					"print_log",
+					"clean_log"
+				]
+			},
+			"uci": [ "photondns" ]
+		},
+		"write": {
+			"file": {
+				"/etc/photondns/*": [ "write" ],
+				"/var/log/*": [ "write" ]
+			},
+			"ubus": {
+				"file": [ "write" ]
+			},
+			"uci": [ "photondns" ]
+		}
+	}
+}

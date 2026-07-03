@@ -1,0 +1,225 @@
+#!/bin/sh /etc/rc.common
+# photondns - high performance DNS forwarder with adaptive failover
+
+START=75
+USE_PROCD=1
+
+PROG=/usr/bin/photondns
+CONF=/var/etc/photondns.toml
+RULE_DIR=/etc/photondns
+REDIRECT_LOCK_FILE=/etc/photondns/redirect.lock
+
+get_config() {
+	config_get enabled $1 enabled 0
+	config_get listen_address $1 listen_address "0.0.0.0"
+	config_get listen_port $1 listen_port 5335
+	config_get log_level $1 log_level "info"
+	config_get log_file $1 log_file "/var/log/photondns.log"
+	config_get api_port $1 api_port 8053
+	config_get redirect $1 redirect 0
+	config_get dns_hijack $1 dns_hijack 0
+	config_get cache $1 cache 1
+	config_get cache_size $1 cache_size 8192
+	config_get min_ttl $1 min_ttl 0
+	config_get max_ttl $1 max_ttl 86400
+	config_get negative_ttl $1 negative_ttl 30
+	config_get serve_stale $1 serve_stale 1
+	config_get stale_ttl $1 stale_ttl 86400
+	config_get prefetch $1 prefetch 1
+	config_get dump_cache $1 dump_cache 1
+	config_get dump_interval $1 dump_interval 3600
+	config_get strategy $1 strategy "race"
+	config_get hedge_delay $1 hedge_delay 250
+	config_get query_timeout $1 query_timeout 2000
+	config_get health_check_interval $1 health_check_interval 10
+	config_get health_check_domain $1 health_check_domain "www.gstatic.com"
+	config_get fail_threshold $1 fail_threshold 3
+	config_get recover_threshold $1 recover_threshold 2
+	config_get cooldown $1 cooldown 15
+	config_get bootstrap_dns $1 bootstrap_dns "223.5.5.5"
+	config_get insecure_skip_verify $1 insecure_skip_verify 0
+	config_get idle_timeout $1 idle_timeout 30
+	config_get reject_type65 $1 reject_type65 0
+}
+
+append_upstream() {
+	upstream_list="${upstream_list}\"$1\", "
+}
+
+append_backup() {
+	backup_list="${backup_list}\"$1\", "
+}
+
+append_local() {
+	local_list="${local_list}\"$1\", "
+}
+
+bool_str() {
+	[ "$1" = "1" ] && echo "true" || echo "false"
+}
+
+generate_config() {
+	mkdir -p /var/etc
+	upstream_list="" backup_list="" local_list=""
+	config_list_foreach main upstream append_upstream
+	config_list_foreach main backup_upstream append_backup
+	config_list_foreach main local_upstream append_local
+	[ -z "$upstream_list" ] && upstream_list="\"udp://223.5.5.5\", "
+
+	local cache_enabled=$(bool_str $cache)
+	local dump_file=""
+	[ "$dump_cache" = "1" ] && dump_file="$RULE_DIR/cache.dump"
+
+	cat > $CONF <<-EOF
+	# generated from /etc/config/photondns - do not edit
+	[server]
+	listen = ["$listen_address:$listen_port"]
+	tcp = true
+
+	[cache]
+	enabled = $cache_enabled
+	size = $cache_size
+	min_ttl = $min_ttl
+	max_ttl = $max_ttl
+	negative_ttl = $negative_ttl
+	serve_stale = $(bool_str $serve_stale)
+	stale_ttl = $stale_ttl
+	prefetch = $(bool_str $prefetch)
+	dump_file = "$dump_file"
+	dump_interval = $dump_interval
+
+	[api]
+	listen = "127.0.0.1:$api_port"
+
+	[log]
+	level = "$log_level"
+	file = "$log_file"
+
+	[failover]
+	health_check_interval = $health_check_interval
+	health_check_domain = "$health_check_domain"
+	fail_threshold = $fail_threshold
+	recover_threshold = $recover_threshold
+	cooldown = $cooldown
+
+	[routing]
+	hosts_file = "$RULE_DIR/hosts.txt"
+	block_file = "$RULE_DIR/block.txt"
+	local_domains_file = "$RULE_DIR/local_domains.txt"
+	redirect_file = "$RULE_DIR/redirect.txt"
+	reject_type65 = $(bool_str $reject_type65)
+
+	[[group]]
+	name = "main"
+	strategy = "$strategy"
+	upstreams = [${upstream_list%, }]
+	backups = [${backup_list%, }]
+	hedge_delay_ms = $hedge_delay
+	timeout_ms = $query_timeout
+	insecure_skip_verify = $(bool_str $insecure_skip_verify)
+	bootstrap = "$bootstrap_dns"
+	idle_timeout = $idle_timeout
+	EOF
+
+	[ -n "$local_list" ] && cat >> $CONF <<-EOF
+
+	[[group]]
+	name = "local"
+	strategy = "$strategy"
+	upstreams = [${local_list%, }]
+	hedge_delay_ms = $hedge_delay
+	timeout_ms = $query_timeout
+	insecure_skip_verify = $(bool_str $insecure_skip_verify)
+	bootstrap = "$bootstrap_dns"
+	idle_timeout = $idle_timeout
+	EOF
+}
+
+service_triggers() {
+	procd_add_reload_trigger "photondns"
+}
+
+uci_set_or_del() {
+	local key="$1"
+	local val="$2"
+	if [ -n "$val" ]; then
+		uci set "$key=$val"
+	else
+		uci -q del "$key"
+	fi
+}
+
+dhcp_setting() {
+	[ ! -f "$REDIRECT_LOCK_FILE" ] && {
+		printf "noresolv=$(uci -q get dhcp.@dnsmasq[0].noresolv)\n"
+		printf "resolvfile=$(uci -q get dhcp.@dnsmasq[0].resolvfile)\n"
+		printf "cachesize=$(uci -q get dhcp.@dnsmasq[0].cachesize)\n"
+		printf "rebind_protection=$(uci -q get dhcp.@dnsmasq[0].rebind_protection)\n"
+	} > $REDIRECT_LOCK_FILE
+	sed -i "/list server/d" /etc/config/dhcp
+	uci add_list dhcp.@dnsmasq[0].server="127.0.0.1#$listen_port"
+	uci set dhcp.@dnsmasq[0].rebind_protection='0'
+	uci set dhcp.@dnsmasq[0].noresolv='1'
+	uci set dhcp.@dnsmasq[0].cachesize='0'
+	uci commit dhcp
+}
+
+restore_dhcp_setting() {
+	if [ -f "$REDIRECT_LOCK_FILE" ]; then
+		sed -i "/list server/d" /etc/config/dhcp
+		. "$REDIRECT_LOCK_FILE"
+		uci_set_or_del dhcp.@dnsmasq[0].noresolv "$noresolv"
+		uci_set_or_del dhcp.@dnsmasq[0].resolvfile "$resolvfile"
+		uci_set_or_del dhcp.@dnsmasq[0].cachesize "$cachesize"
+		uci_set_or_del dhcp.@dnsmasq[0].rebind_protection "$rebind_protection"
+		uci commit dhcp
+		rm -f "$REDIRECT_LOCK_FILE"
+	fi
+}
+
+reload_dnsmasq() {
+	[ -x /etc/init.d/dnsmasq ] && /etc/init.d/dnsmasq reload
+}
+
+start_service() {
+	config_load "photondns"
+	config_foreach get_config "photondns"
+	[ "$enabled" -ne 1 ] && return 1
+
+	mkdir -p $RULE_DIR
+	generate_config
+
+	procd_open_instance photondns
+	procd_set_param command $PROG -c $CONF
+	procd_set_param file $CONF
+	procd_set_param stdout 1
+	procd_set_param stderr 1
+	procd_set_param respawn 3600 5 0
+	procd_set_param limits nofile="65535 65535"
+	procd_close_instance
+
+	if [ "$redirect" -eq 1 ]; then
+		dhcp_setting
+	else
+		restore_dhcp_setting
+	fi
+	reload_dnsmasq
+
+	# force redirect all LAN DNS to photondns (fw4)
+	if [ "$redirect" -eq 1 ] && [ "$dns_hijack" -eq 1 ] && [ -f /sbin/fw4 ]; then
+		nft --check list table inet photondns >/dev/null 2>&1 && nft delete table inet photondns
+		nft add table inet photondns
+		nft add chain inet photondns prerouting "{ type nat hook prerouting priority -95; policy accept; }"
+		nft add rule inet photondns prerouting "meta nfproto { ipv4, ipv6 } udp dport 53 counter redirect to :$listen_port comment \"photondns DNS hijack\""
+	else
+		nft --check list table inet photondns >/dev/null 2>&1 && nft delete table inet photondns
+	fi
+}
+
+stop_service() {
+	config_load "photondns"
+	config_foreach get_config "photondns"
+	[ "$enabled" -eq 0 ] && restore_dhcp_setting && reload_dnsmasq
+	nft --check list table inet photondns >/dev/null 2>&1 && nft delete table inet photondns
+	return 0
+}

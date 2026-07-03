@@ -1,0 +1,24 @@
+#!/bin/sh
+
+mkdir -p /etc/photondns
+[ -f /etc/photondns/hosts.txt ] || cat > /etc/photondns/hosts.txt <<'EOF'
+# static hosts: <name> <ip> [ip...]
+# router.lan 192.168.1.1
+EOF
+[ -f /etc/photondns/block.txt ] || cat > /etc/photondns/block.txt <<'EOF'
+# blocked domains (NXDOMAIN). one per line:
+#   example.com          matches the domain and all subdomains
+#   full:example.com     exact match only
+EOF
+[ -f /etc/photondns/local_domains.txt ] || cat > /etc/photondns/local_domains.txt <<'EOF'
+# domains resolved by the "local" upstream group (if configured):
+# cn
+# taobao.com
+EOF
+[ -f /etc/photondns/redirect.txt ] || cat > /etc/photondns/redirect.txt <<'EOF'
+# redirect rules: <from-domain> <to-domain>
+# old.example.com new.example.com
+EOF
+
+rm -f /tmp/luci-indexcache*
+exit 0

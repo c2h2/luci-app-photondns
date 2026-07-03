@@ -1,0 +1,37 @@
+[package]
+name = "photondns"
+version = "0.1.0"
+edition = "2021"
+description = "High-performance DNS forwarder with adaptive failover, for OpenWrt"
+license = "GPL-3.0-only"
+
+[[bin]]
+name = "photondns"
+path = "src/main.rs"
+
+[[bin]]
+name = "photonbench"
+path = "src/bin/photonbench.rs"
+
+[dependencies]
+anyhow = "1"
+futures = { version = "0.3", default-features = false, features = ["std"] }
+tokio ={ version = "1", features = ["rt-multi-thread", "net", "time", "sync", "io-util", "signal", "macros"] }
+parking_lot = "0.12"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+log = { version = "0.4", features = ["std"] }
+lru = "0.12"
+fastrand = "2"
+socket2 = { version = "0.5", features = ["all"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12", "logging"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
+webpki-roots = "0.26"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = true
+panic = "abort"

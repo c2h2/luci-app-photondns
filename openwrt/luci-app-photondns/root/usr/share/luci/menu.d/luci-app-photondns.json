@@ -1,0 +1,45 @@
+{
+	"admin/services/photondns": {
+		"title": "photondns",
+		"order": 30,
+		"action": {
+			"type": "firstchild"
+		},
+		"depends": {
+			"acl": [ "luci-app-photondns" ],
+			"uci": { "photondns": true }
+		}
+	},
+	"admin/services/photondns/status": {
+		"title": "Status",
+		"order": 5,
+		"action": {
+			"type": "view",
+			"path": "photondns/status"
+		}
+	},
+	"admin/services/photondns/basic": {
+		"title": "Basic Settings",
+		"order": 10,
+		"action": {
+			"type": "view",
+			"path": "photondns/basic"
+		}
+	},
+	"admin/services/photondns/rules": {
+		"title": "Rules",
+		"order": 15,
+		"action": {
+			"type": "view",
+			"path": "photondns/rules"
+		}
+	},
+	"admin/services/photondns/logs": {
+		"title": "Logs",
+		"order": 20,
+		"action": {
+			"type": "view",
+			"path": "photondns/logs"
+		}
+	}
+}
