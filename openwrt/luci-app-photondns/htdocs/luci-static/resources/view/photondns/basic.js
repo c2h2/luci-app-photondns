@@ -267,10 +267,15 @@ return view.extend({
 		o.default = true;
 		o.rmempty = false;
 
-		o = s.taboption('cache', form.Value, 'cache_size', _('Cache size (entries)'),
-			_('Maximum number of cached responses (sharded LRU)'));
-		o.datatype = 'and(uinteger,min(0))';
-		o.default = '8192';
+		o = s.taboption('cache', form.ListValue, 'cache_size', _('Cache size (entries)'),
+			_('Maximum number of cached responses (sharded LRU). RAM shown is the ceiling when the cache is fully populated (~400 B/entry); actual use grows lazily.'));
+		o.value('8192', _('8192 (~3 MB)'));
+		o.value('16384', _('16384 (~6 MB)'));
+		o.value('32768', _('32768 (~13 MB)'));
+		o.value('65536', _('65536 (~25 MB)'));
+		o.value('131072', _('131072 (~50 MB)'));
+		o.value('262144', _('262144 (~100 MB)'));
+		o.default = '65536';
 		o.depends('cache', '1');
 
 		o = s.taboption('cache', form.Value, 'min_ttl', _('Minimum TTL (s)'),

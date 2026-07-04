@@ -1,0 +1,118 @@
+<%+header%>
+
+<h2><%:photondns Status%></h2>
+<div class="cbi-map-descr">
+	<%:High-performance Rust DNS forwarder with caching and adaptive multi-path failover.%>
+</div>
+
+<div style="margin:8px 0">
+	<button class="btn cbi-button-apply" id="photondns_flush"><%:Flush DNS Cache%></button>
+	<span id="photondns_flush_msg" style="margin-left:10px"></span>
+</div>
+
+<div id="photondns_stats"><%:Collecting data...%></div>
+
+<script type="text/javascript">//<![CDATA[
+(function() {
+	var statsUrl = '<%=luci.dispatcher.build_url("admin/services/photondns/api/stats")%>';
+	var flushUrl = '<%=luci.dispatcher.build_url("admin/services/photondns/api/flush")%>';
+
+	function esc(s) {
+		return String(s == null ? '' : s)
+			.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+	}
+	function fmtUptime(s) {
+		var d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+		if (d > 0) return d + 'd ' + h + 'h ' + m + 'm';
+		if (h > 0) return h + 'h ' + m + 'm';
+		return m + 'm ' + (s % 60) + 's';
+	}
+	function card(title, rows) {
+		var h = '<div style="flex:1; min-width:240px; margin:5px; padding:12px 16px; border:1px solid rgba(128,128,128,.35); border-radius:8px;">';
+		h += '<h4 style="margin:0 0 8px 0">' + esc(title) + '</h4><table style="width:100%">';
+		for (var i = 0; i < rows.length; i++)
+			h += '<tr><td style="opacity:.7; padding:1px 0">' + esc(rows[i][0]) +
+				'</td><td style="text-align:right; font-weight:bold">' + rows[i][1] + '</td></tr>';
+		return h + '</table></div>';
+	}
+	function badge(up) {
+		return '<span style="padding:1px 8px; border-radius:8px; color:#fff; background:' +
+			(up ? '#2ca02c' : '#d43f3a') + '">' + (up ? '<%:UP%>' : '<%:DOWN%>') + '</span>';
+	}
+
+	function render(res) {
+		var stats = null;
+		if (res && res.running && res.raw) { try { stats = JSON.parse(res.raw); } catch (e) {} }
+		var el = document.getElementById('photondns_stats');
+		if (!el) return;
+		if (!stats) {
+			el.innerHTML = '<div class="alert-message warning"><%:photondns is not running (or the API is unreachable). Enable and start it from Basic Settings.%></div>';
+			return;
+		}
+		var q = stats.queries, c = stats.cache;
+		var html = '<div style="display:flex; flex-wrap:wrap">';
+		html += card('<%:Service%>', [
+			['<%:Status%>', '<span style="color:#2ca02c"><%:RUNNING%></span>'],
+			['<%:Version%>', esc(stats.version)],
+			['<%:Uptime%>', fmtUptime(stats.uptime)],
+			['<%:Queries/min%>', esc(q.qpm)]
+		]);
+		html += card('<%:Queries%>', [
+			['<%:Total%>', esc(q.total)],
+			['<%:UDP / TCP%>', esc(q.udp) + ' / ' + esc(q.tcp)],
+			['<%:Blocked%>', esc(q.blocked)],
+			['<%:Hosts / Redirected%>', esc(q.hosts) + ' / ' + esc(q.redirected)],
+			['<%:Hedged (failover races)%>', esc(q.hedged)],
+			['<%:SERVFAIL%>', esc(q.servfail)]
+		]);
+		html += card('<%:Cache%>', [
+			['<%:Entries%>', esc(c.size) + ' / ' + esc(c.capacity)],
+			['<%:Hit rate%>', esc(c.hit_rate) + '%'],
+			['<%:Hits / Misses%>', esc(c.hits) + ' / ' + esc(c.misses)],
+			['<%:Stale served%>', esc(c.stale_served)],
+			['<%:Prefetches%>', esc(c.prefetches)],
+			['<%:Evictions%>', esc(c.evictions)]
+		]);
+		html += '</div>';
+
+		html += '<h3 style="margin-top:14px"><%:Upstream Servers%></h3>';
+		html += '<table class="table cbi-section-table"><tr class="tr table-titles">' +
+			'<th class="th"><%:Group%></th><th class="th"><%:Upstream%></th><th class="th"><%:State%></th>' +
+			'<th class="th"><%:Latency (EWMA)%></th><th class="th"><%:Last RTT%></th>' +
+			'<th class="th"><%:OK%></th><th class="th"><%:Fail%></th><th class="th"><%:Outages%></th></tr>';
+		var ups = stats.upstreams || [];
+		for (var i = 0; i < ups.length; i++) {
+			var u = ups[i];
+			html += '<tr class="tr">' +
+				'<td class="td">' + esc(u.group) + '</td>' +
+				'<td class="td">' + esc(u.addr) + '</td>' +
+				'<td class="td">' + badge(u.healthy) + '</td>' +
+				'<td class="td">' + (u.ewma_ms > 0 ? u.ewma_ms.toFixed(1) + ' ms' : '-') + '</td>' +
+				'<td class="td">' + (u.last_rtt_ms > 0 ? u.last_rtt_ms.toFixed(1) + ' ms' : '-') + '</td>' +
+				'<td class="td">' + esc(u.ok) + '</td>' +
+				'<td class="td">' + esc(u.fail) + '</td>' +
+				'<td class="td">' + esc(u.down_events) + '</td></tr>';
+		}
+		html += '</table>';
+		el.innerHTML = html;
+	}
+
+	document.getElementById('photondns_flush').onclick = function() {
+		var msg = document.getElementById('photondns_flush_msg');
+		XHR.get(flushUrl, null, function(x, d) {
+			if (d && d.success) {
+				msg.style.color = 'green';
+				msg.innerHTML = '<%:DNS cache flushed.%>';
+			} else {
+				msg.style.color = 'red';
+				msg.innerHTML = '<%:Flush failed, is photondns running?%>';
+			}
+			window.setTimeout(function() { msg.innerHTML = ''; }, 4000);
+		});
+	};
+
+	XHR.poll(3, statsUrl, null, function(x, d) { render(d); });
+})();
+//]]></script>
+
+<%+footer%>

@@ -1,0 +1,16 @@
+<div class="cbi-section">
+	<p id="photondns_svc_status"><em><%:Collecting data...%></em></p>
+</div>
+
+<script type="text/javascript">//<![CDATA[
+(function() {
+	var url = '<%=luci.dispatcher.build_url("admin/services/photondns/api/running")%>';
+	XHR.poll(5, url, null, function(x, d) {
+		var el = document.getElementById('photondns_svc_status');
+		if (!el) return;
+		var run = d && d.running;
+		el.innerHTML = '<em><span style="color:' + (run ? 'green' : 'red') + '">' +
+			'<strong>photondns ' + (run ? '<%:RUNNING%>' : '<%:NOT RUNNING%>') + '</strong></span></em>';
+	});
+})();
+//]]></script>

@@ -1,0 +1,103 @@
+<%+header%>
+
+<h2><%:List Updates%></h2>
+<div class="cbi-map-descr">
+	<%:Manually download or refresh the domain lists, fetched via CN-friendly mirrors. Enable the corresponding features in Basic Settings to use them.%>
+</div>
+
+<div id="photondns_lists"></div>
+
+<script type="text/javascript">//<![CDATA[
+(function() {
+	var statusUrl = '<%=luci.dispatcher.build_url("admin/services/photondns/api/liststatus")%>';
+	var updateUrl = '<%=luci.dispatcher.build_url("admin/services/photondns/api/listupdate")%>';
+
+	var LISTS = [
+		{ key: 'chinalist', title: '<%:China Domain List%>',
+			descr: '<%:Mainland-China domains routed to the Local-domain DNS group (split DNS). Source: felixonmars/dnsmasq-china-list.%>',
+			file: '/etc/photondns/china_list.txt' },
+		{ key: 'adlist', title: '<%:Ad Block Lists%>',
+			descr: '<%:Advertising / tracker domains answered with NXDOMAIN. Sources are configured in Basic Settings (default: anti-AD).%>',
+			file: '/etc/photondns/ad_list.txt' }
+	];
+
+	function esc(s) {
+		return String(s == null ? '' : s)
+			.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+	}
+	function statusHtml(st) {
+		if (st && st.updating)
+			return '<em style="color:#c7a500"><%:Updating...%></em>';
+		if (st && st.exists)
+			return '<strong>' + st.domains + ' <%:domains, updated%> ' +
+				esc(new Date(st.mtime * 1000).toLocaleString()) + '</strong>';
+		return '<em style="color:#d43f3a"><%:not downloaded yet%></em>';
+	}
+
+	function build() {
+		var html = '';
+		for (var i = 0; i < LISTS.length; i++) {
+			var l = LISTS[i];
+			html += '<div class="cbi-section">' +
+				'<h3>' + esc(l.title) + '</h3>' +
+				'<div class="cbi-section-descr">' + esc(l.descr) + '</div>' +
+				'<table class="table">' +
+				'<tr class="tr"><td class="td left" style="width:220px; opacity:.7"><%:Current list%></td>' +
+				'<td class="td left" id="' + l.key + '_status"></td></tr>' +
+				'<tr class="tr"><td class="td left" style="opacity:.7"><%:List file%></td>' +
+				'<td class="td left">' + esc(l.file) + '</td></tr></table>' +
+				'<div style="margin:12px 0">' +
+				'<button class="btn cbi-button-apply" id="' + l.key + '_btn"><%:Update Now%></button></div>' +
+				'<pre id="' + l.key + '_log" style="max-height:200px; overflow-y:auto; white-space:pre-wrap; ' +
+				'padding:8px; border:1px solid rgba(128,128,128,.35); border-radius:6px"><%:(empty)%></pre>' +
+				'</div>';
+		}
+		document.getElementById('photondns_lists').innerHTML = html;
+		for (var j = 0; j < LISTS.length; j++)
+			(function(l) {
+				document.getElementById(l.key + '_btn').onclick = function() { doUpdate(l); };
+			})(LISTS[j]);
+	}
+
+	function applyStatus(l, st) {
+		var s = document.getElementById(l.key + '_status');
+		if (s) s.innerHTML = statusHtml(st);
+		var pre = document.getElementById(l.key + '_log');
+		if (pre && st && typeof st.log === 'string' && st.log.replace(/^\s+|\s+$/g, '') !== '')
+			pre.textContent = st.log;
+		var btn = document.getElementById(l.key + '_btn');
+		if (btn) btn.disabled = !!(st && st.updating);
+	}
+
+	function refresh(l, cb) {
+		XHR.get(statusUrl, { list: l.key }, function(x, st) {
+			applyStatus(l, st);
+			if (cb) cb(st);
+		});
+	}
+
+	function doUpdate(l) {
+		XHR.get(updateUrl, { list: l.key }, function(x, res) {
+			if (!res || !res.success) {
+				alert('<%:Update failed to start:%> ' + ((res && res.error) || '?'));
+				return;
+			}
+			var btn = document.getElementById(l.key + '_btn');
+			if (btn) btn.disabled = true;
+			var poll = window.setInterval(function() {
+				refresh(l, function(st) {
+					if (st && !st.updating) {
+						window.clearInterval(poll);
+						if (btn) btn.disabled = false;
+					}
+				});
+			}, 2000);
+		});
+	}
+
+	build();
+	for (var i = 0; i < LISTS.length; i++) refresh(LISTS[i]);
+})();
+//]]></script>
+
+<%+footer%>

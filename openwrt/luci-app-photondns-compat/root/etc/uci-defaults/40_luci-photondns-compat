@@ -1,0 +1,4 @@
+#!/bin/sh
+# Refresh the LuCI dispatch cache so the new photondns menu appears.
+rm -f /tmp/luci-indexcache /tmp/luci-modulecache/* 2>/dev/null
+exit 0

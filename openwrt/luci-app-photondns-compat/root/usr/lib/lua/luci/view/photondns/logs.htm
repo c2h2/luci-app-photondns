@@ -1,0 +1,38 @@
+<%+header%>
+
+<h2><%:photondns Logs%></h2>
+
+<div style="margin:8px 0">
+	<button class="btn cbi-button-remove" id="photondns_clearlog"><%:Clear Log%></button>
+	<span id="photondns_clearlog_msg" style="margin-left:10px"></span>
+</div>
+
+<pre id="photondns_log" style="max-height:640px; overflow-y:auto; white-space:pre-wrap; padding:8px; border:1px solid rgba(128,128,128,.35); border-radius:6px"><%:(empty)%></pre>
+
+<script type="text/javascript">//<![CDATA[
+(function() {
+	var logUrl   = '<%=luci.dispatcher.build_url("admin/services/photondns/api/log")%>';
+	var cleanUrl = '<%=luci.dispatcher.build_url("admin/services/photondns/api/cleanlog")%>';
+	var pre = document.getElementById('photondns_log');
+
+	document.getElementById('photondns_clearlog').onclick = function() {
+		var msg = document.getElementById('photondns_clearlog_msg');
+		XHR.get(cleanUrl, null, function(x, d) {
+			pre.textContent = '';
+			msg.style.color = 'green';
+			msg.innerHTML = '<%:Log cleared.%>';
+			window.setTimeout(function() { msg.innerHTML = ''; }, 4000);
+		});
+	};
+
+	XHR.poll(5, logUrl, null, function(x, d) {
+		if (d && typeof d.log === 'string') {
+			var stick = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 20;
+			pre.textContent = d.log || '<%:(empty)%>';
+			if (stick) pre.scrollTop = pre.scrollHeight;
+		}
+	});
+})();
+//]]></script>
+
+<%+footer%>

@@ -1,0 +1,108 @@
+<%+header%>
+
+<h2><%:Query Log%></h2>
+<div class="cbi-map-descr">
+	<%:Live view of recent DNS queries: which client asked, how each query was answered (cache, hosts, blocked, or the upstream group and server that won the race) and how long it took. Kept in memory only.%>
+</div>
+
+<div style="margin:8px 0">
+	<input type="text" class="cbi-input-text" id="photondns_qfilter" style="max-width:300px"
+		placeholder="<%:Filter by domain / client / route...%>" />
+</div>
+
+<div id="photondns_qlog"><%:Collecting data...%></div>
+
+<script type="text/javascript">//<![CDATA[
+(function() {
+	var url = '<%=luci.dispatcher.build_url("admin/services/photondns/api/querylog")%>';
+	var lastEntries = null;
+
+	var QTYPES = {
+		1: 'A', 2: 'NS', 5: 'CNAME', 6: 'SOA', 12: 'PTR', 15: 'MX', 16: 'TXT',
+		28: 'AAAA', 33: 'SRV', 35: 'NAPTR', 43: 'DS', 46: 'RRSIG', 48: 'DNSKEY',
+		64: 'SVCB', 65: 'HTTPS', 255: 'ANY', 257: 'CAA'
+	};
+	var ROUTE_COLORS = {
+		cache: '#2ca02c', stale: '#17a2b8', hosts: '#7952b3', blocked: '#d43f3a',
+		redirect: '#6c757d', servfail: '#8b0000', local: '#e67e22', main: '#0d6efd'
+	};
+
+	function esc(s) {
+		return String(s == null ? '' : s)
+			.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+	}
+	function routeBadge(route) {
+		var color = ROUTE_COLORS[route] || '#0d6efd';
+		return '<span style="padding:0 7px; border-radius:8px; color:#fff; font-size:90%; background:' +
+			color + '">' + esc(route) + '</span>';
+	}
+	function fmtTime(ts) {
+		var d = new Date(ts * 1000);
+		function p(n) { return ('0' + n).slice(-2); }
+		return p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+	}
+
+	function renderTable(entries) {
+		var f = (document.getElementById('photondns_qfilter').value || '').trim().toLowerCase();
+		var html = '<table class="table cbi-section-table"><tr class="tr table-titles">' +
+			'<th class="th" style="width:70px"><%:Time%></th>' +
+			'<th class="th" style="width:120px"><%:Client%></th>' +
+			'<th class="th"><%:Domain%></th>' +
+			'<th class="th" style="width:70px"><%:Type%></th>' +
+			'<th class="th" style="width:90px"><%:Route%></th>' +
+			'<th class="th"><%:Upstream%></th>' +
+			'<th class="th" style="width:80px; text-align:right"><%:Time (ms)%></th></tr>';
+		var shown = 0;
+		for (var i = 0; i < entries.length; i++) {
+			var e = entries[i];
+			if (f && !((e.qname || '').toLowerCase().indexOf(f) >= 0 ||
+				(e.client || '').toLowerCase().indexOf(f) >= 0 ||
+				(e.route || '').toLowerCase().indexOf(f) >= 0 ||
+				(e.upstream || '').toLowerCase().indexOf(f) >= 0))
+				continue;
+			if (++shown > 500) break;
+			html += '<tr class="tr">' +
+				'<td class="td">' + fmtTime(e.ts) + '</td>' +
+				'<td class="td">' + esc(e.client) + '</td>' +
+				'<td class="td" style="word-break:break-all">' + esc(e.qname) + '</td>' +
+				'<td class="td">' + esc(QTYPES[e.qtype] || e.qtype) + '</td>' +
+				'<td class="td">' + routeBadge(e.route) + '</td>' +
+				'<td class="td">' + esc(e.upstream || '-') + '</td>' +
+				'<td class="td" style="text-align:right">' +
+					(e.rtt_ms < 0.1 ? '&lt;0.1' : esc(e.rtt_ms)) + '</td></tr>';
+		}
+		if (shown === 0)
+			html += '<tr class="tr"><td class="td" colspan="7" style="opacity:.6"><%:(no entries)%></td></tr>';
+		html += '</table>';
+		return html;
+	}
+
+	function parse(res) {
+		if (!res || !res.running || !res.raw) return null;
+		try { return JSON.parse(res.raw).entries || []; } catch (e) { return null; }
+	}
+
+	function render(res) {
+		var el = document.getElementById('photondns_qlog');
+		if (!el) return;
+		var entries = parse(res);
+		if (entries === null && lastEntries === null) {
+			el.innerHTML = '<div class="alert-message warning"><%:photondns is not running (or the query log is disabled).%></div>';
+			return;
+		}
+		if (entries !== null) lastEntries = entries;
+		el.innerHTML = renderTable(lastEntries || []);
+	}
+
+	document.getElementById('photondns_qfilter').onkeyup = function() {
+		if (lastEntries !== null) {
+			var el = document.getElementById('photondns_qlog');
+			if (el) el.innerHTML = renderTable(lastEntries);
+		}
+	};
+
+	XHR.poll(3, url, null, function(x, d) { render(d); });
+})();
+//]]></script>
+
+<%+footer%>

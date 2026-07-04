@@ -1,0 +1,21 @@
+{
+	"luci-app-photondns-compat": {
+		"description": "Grant access to the photondns (legacy LuCI) pages",
+		"read": {
+			"uci": [ "photondns" ],
+			"file": {
+				"/etc/photondns/*": [ "read" ],
+				"/var/log/photondns*.log": [ "read" ],
+				"/usr/bin/photondns-chinalist": [ "exec" ],
+				"/usr/bin/photondns-adlist": [ "exec" ]
+			}
+		},
+		"write": {
+			"uci": [ "photondns" ],
+			"file": {
+				"/etc/photondns/*": [ "write" ],
+				"/var/log/photondns*.log": [ "write" ]
+			}
+		}
+	}
+}
