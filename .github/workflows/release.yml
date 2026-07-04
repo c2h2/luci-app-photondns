@@ -32,24 +32,19 @@ jobs:
           - { arch: x86_64,   triple: x86_64-unknown-linux-musl,       owrt: x86_64,                    tier: 2 }
           - { arch: armv7,    triple: armv7-unknown-linux-musleabihf,  owrt: arm_cortex-a7_neon-vfpv4,  tier: 2 }
           - { arch: riscv64,  triple: riscv64gc-unknown-linux-musl,    owrt: riscv64_riscv64,           tier: 2 }
-          # tier-3: no prebuilt rust-std, built with -Z build-std on nightly.
-          # Allowed to fail so a musl/build-std hiccup never blocks a release.
-          - { arch: mips,     triple: mips-unknown-linux-musl,         owrt: mips_24kc,                 tier: 3 }
-          - { arch: mipsel,   triple: mipsel-unknown-linux-musl,       owrt: mipsel_24kc,               tier: 3 }
-    continue-on-error: ${{ matrix.tier == 3 }}
+    # NB: 32-bit mips/mipsel are intentionally excluded — the daemon uses
+    # AtomicU64, which those targets lack (no native 64-bit atomics), so they
+    # cannot build without code changes. Add them back only after the atomics
+    # are made portable.
+    continue-on-error: false
     steps:
       - uses: actions/checkout@v4
 
       - name: Install Rust
         run: |
-          if [ "${{ matrix.tier }}" = "3" ]; then
-            rustup toolchain install nightly --profile minimal -c rust-src
-            rustup default nightly
-          else
-            rustup toolchain install stable --profile minimal
-            rustup default stable
-            rustup target add ${{ matrix.triple }}
-          fi
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          rustup target add ${{ matrix.triple }}
 
       - uses: mlugg/setup-zig@v2
         with:
@@ -60,13 +55,7 @@ jobs:
 
       - name: Cross-compile daemon
         run: |
-          if [ "${{ matrix.tier }}" = "3" ]; then
-            cargo +nightly zigbuild --release --bin photondns \
-              --target ${{ matrix.triple }} \
-              -Z build-std=std,panic_abort
-          else
-            cargo zigbuild --release --bin photondns --target ${{ matrix.triple }}
-          fi
+          cargo zigbuild --release --bin photondns --target ${{ matrix.triple }}
           file target/${{ matrix.triple }}/release/photondns
 
       - name: Install apk-tools 3.x (for .apk output)

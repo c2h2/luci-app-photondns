@@ -104,7 +104,7 @@ backups = ["tls://8.8.8.8"]
 OpenWrt — prebuilt packages (recommended). Each
 [release](https://github.com/c2h2/luci-app-photondns/releases) ships
 `.ipk` (opkg, ≤ 23.05) and `.apk` (apk, ≥ 24.10) for aarch64, x86_64, armv7,
-riscv64 (and best-effort mips/mipsel), plus the two arch-independent LuCI apps:
+and riscv64, plus the two arch-independent LuCI apps:
 
 ```sh
 # opkg (OpenWrt ≤ 23.05) — pick your arch

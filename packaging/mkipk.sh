@@ -63,7 +63,12 @@ printf '2.0\n' > "$WORK/debian-binary"
 
 # ---- assemble the ar archive (order matters for opkg) ----
 rm -f "$OUT"
-( cd "$WORK" && ar rc "$OUT.tmp" debian-binary control.tar.gz data.tar.gz )
-mv "$WORK/$(basename "$OUT").tmp" "$OUT" 2>/dev/null || mv "$OUT.tmp" "$OUT"
+# ar member names are taken from the paths given, so run from $WORK to keep
+# them bare (debian-binary, not /tmp/.../debian-binary). Write to an absolute
+# output path so cwd doesn't matter.
+mkdir -p "$(dirname "$OUT")"
+OUT_ABS="$(cd "$(dirname "$OUT")" && pwd)/$(basename "$OUT")"
+rm -f "$OUT_ABS"
+( cd "$WORK" && ar rc "$OUT_ABS" debian-binary control.tar.gz data.tar.gz )
 
 echo "built $OUT"
