@@ -27,26 +27,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ae3f5d315924270530207e2a68396c3cc547f6dca3fbdca317cfb1a51edb593"
 
 [[package]]
-name = "photondns"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "fastrand",
- "futures",
- "log",
- "lru",
- "parking_lot",
- "rustls",
- "serde",
- "serde_json",
- "socket2 0.5.10",
- "tokio",
- "tokio-rustls",
- "toml",
- "webpki-roots 0.26.11",
-]
-
-[[package]]
 name = "cc"
 version = "1.2.65"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -278,6 +258,26 @@ dependencies = [
  "redox_syscall",
  "smallvec",
  "windows-link",
+]
+
+[[package]]
+name = "photondns"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "fastrand",
+ "futures",
+ "log",
+ "lru",
+ "parking_lot",
+ "rustls",
+ "serde",
+ "serde_json",
+ "socket2 0.5.10",
+ "tokio",
+ "tokio-rustls",
+ "toml",
+ "webpki-roots 0.26.11",
 ]
 
 [[package]]
