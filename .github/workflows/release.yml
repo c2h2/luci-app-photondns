@@ -51,31 +51,34 @@ jobs:
             rustup target add ${{ matrix.triple }}
           fi
 
-      - name: Install zig + cargo-zigbuild
-        run: |
-          pipx install ziglang || pip install ziglang
-          cargo install cargo-zigbuild --locked
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.13.0
+
+      - name: Install cargo-zigbuild
+        run: cargo install cargo-zigbuild --locked
 
       - name: Cross-compile daemon
         run: |
           if [ "${{ matrix.tier }}" = "3" ]; then
             cargo +nightly zigbuild --release --bin photondns \
               --target ${{ matrix.triple }} \
-              -Z build-std=std,panic_abort -Z build-std-features=panic_immediate_abort
+              -Z build-std=std,panic_abort
           else
             cargo zigbuild --release --bin photondns --target ${{ matrix.triple }}
           fi
           file target/${{ matrix.triple }}/release/photondns
 
-      - name: Install apk-tools (for .apk output)
+      - name: Install apk-tools 3.x (for .apk output)
         run: |
-          sudo apt-get update
-          sudo apt-get install -y apk-tools || {
-            echo "apt apk-tools unavailable; building apk-tools from the alpine static binary"
-            curl -fsSL https://gitlab.alpinelinux.org/api/v4/projects/5/packages/generic/v3.0.0_rc1/x86_64/apk.static -o /usr/local/bin/apk 2>/dev/null || true
-            chmod +x /usr/local/bin/apk 2>/dev/null || true
-          }
-          apk --version || echo "apk unavailable — .apk will be skipped for this arch"
+          # OpenWrt 24.10+ uses apk-tools 3.x; grab the Alpine static build,
+          # which ships `apk mkpkg`. An .apk is just a gzip tarball, so we can
+          # unpack the static binary without needing apk itself.
+          url="https://dl-cdn.alpinelinux.org/alpine/edge/main/x86_64/apk-tools-static-3.0.6-r0.apk"
+          curl -fsSL "$url" -o /tmp/apk-static.apk
+          tar xzf /tmp/apk-static.apk -C /tmp sbin/apk.static
+          sudo install -m 0755 /tmp/sbin/apk.static /usr/local/bin/apk
+          apk --version
 
       - name: Assemble packages
         run: |
