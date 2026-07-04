@@ -61,14 +61,23 @@ pack_tar "$CTRL" "$WORK/control.tar.gz"
 # ---- debian-binary ----
 printf '2.0\n' > "$WORK/debian-binary"
 
-# ---- assemble the ar archive (order matters for opkg) ----
-rm -f "$OUT"
-# ar member names are taken from the paths given, so run from $WORK to keep
-# them bare (debian-binary, not /tmp/.../debian-binary). Write to an absolute
-# output path so cwd doesn't matter.
+# ---- assemble the outer container ----
+# OpenWrt's opkg expects the .ipk itself to be a gzip-compressed tar holding
+# debian-binary + control.tar.gz + data.tar.gz (NOT a Debian-style `ar`
+# archive — opkg rejects that as "Malformed package file").
 mkdir -p "$(dirname "$OUT")"
 OUT_ABS="$(cd "$(dirname "$OUT")" && pwd)/$(basename "$OUT")"
 rm -f "$OUT_ABS"
-( cd "$WORK" && ar rc "$OUT_ABS" debian-binary control.tar.gz data.tar.gz )
+
+OUTER="$WORK/outer"
+mkdir -p "$OUTER"
+cp "$WORK/debian-binary" "$WORK/control.tar.gz" "$WORK/data.tar.gz" "$OUTER/"
+if tar --version 2>/dev/null | grep -qi 'gnu'; then
+	tar "${TAR_REPRO[@]}" --no-recursion -C "$OUTER" -czf "$OUT_ABS" \
+		./debian-binary ./control.tar.gz ./data.tar.gz
+else
+	COPYFILE_DISABLE=1 tar "${TAR_REPRO[@]}" -C "$OUTER" -czf "$OUT_ABS" \
+		debian-binary control.tar.gz data.tar.gz
+fi
 
 echo "built $OUT"
