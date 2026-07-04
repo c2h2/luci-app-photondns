@@ -115,9 +115,6 @@ jobs:
           docker run --rm -v "$PWD/dist:/pkgs" openwrt/rootfs:${{ matrix.arch }}-${{ matrix.tag }} sh -c '
             set -e
             mkdir -p /var/lock
-            # accept arch:all packages (the LuCI apps) in this offline rootfs
-            echo "arch all 1" >> /etc/opkg/arch.conf 2>/dev/null || true
-
             opkg install --force-depends /pkgs/photondns_*_'"${{ matrix.arch }}"'*.ipk
             echo "--- installed files ---"
             opkg files photondns
@@ -126,12 +123,17 @@ jobs:
             printf "[server]\nlisten=[\"127.0.0.1:15533\"]\n[[group]]\nname=\"main\"\nupstreams=[\"udp://127.0.0.1:1\"]\n" > /tmp/t.toml
             /usr/bin/photondns -t -c /tmp/t.toml && echo "config validate: OK"
 
-            # LuCI app: curl/rpcd feeds are offline here, so skip dep resolution;
-            # we only need to prove the package unpacks and its files land.
-            opkg install --nodeps --force-depends --force-overwrite --force-architecture \
-              /pkgs/luci-app-photondns_*_all.ipk
-            opkg files luci-app-photondns | head
-            test -f /usr/share/rpcd/ucode/luci.photondns && echo "ucode backend present: OK"
+            # LuCI app (arch: all): opkg wont resolve curl/rpcd offline and is
+            # fussy about arch:all in a feed-less rootfs, so verify by unpacking
+            # the package the same way opkg does and checking its payload lands.
+            mkdir -p /tmp/luci && cd /tmp/luci
+            tar xzf /pkgs/luci-app-photondns_*_all.ipk
+            tar xzf ./data.tar.gz
+            test -f ./usr/share/rpcd/ucode/luci.photondns && echo "ucode backend present: OK"
+            test -f ./www/luci-static/resources/view/photondns/status.js && echo "luci views present: OK"
+            test -f ./etc/init.d/photondns && echo "init script present: OK"
+            # control metadata sane?
+            tar xzf ./control.tar.gz ./control && grep -q "^Package: luci-app-photondns$" ./control && echo "control ok: OK"
             echo "VERIFY OK"
           '
 
