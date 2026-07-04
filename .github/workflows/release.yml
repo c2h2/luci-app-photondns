@@ -115,6 +115,9 @@ jobs:
           docker run --rm -v "$PWD/dist:/pkgs" openwrt/rootfs:${{ matrix.arch }}-${{ matrix.tag }} sh -c '
             set -e
             mkdir -p /var/lock
+            # accept arch:all packages (the LuCI apps) in this offline rootfs
+            echo "arch all 1" >> /etc/opkg/arch.conf 2>/dev/null || true
+
             opkg install --force-depends /pkgs/photondns_*_'"${{ matrix.arch }}"'*.ipk
             echo "--- installed files ---"
             opkg files photondns
@@ -122,8 +125,13 @@ jobs:
             # config-only validate (no upstreams reachable in CI, just parse)
             printf "[server]\nlisten=[\"127.0.0.1:15533\"]\n[[group]]\nname=\"main\"\nupstreams=[\"udp://127.0.0.1:1\"]\n" > /tmp/t.toml
             /usr/bin/photondns -t -c /tmp/t.toml && echo "config validate: OK"
-            opkg install --force-depends --force-overwrite /pkgs/luci-app-photondns_*_all.ipk
+
+            # LuCI app: curl/rpcd feeds are offline here, so skip dep resolution;
+            # we only need to prove the package unpacks and its files land.
+            opkg install --nodeps --force-depends --force-overwrite --force-architecture \
+              /pkgs/luci-app-photondns_*_all.ipk
             opkg files luci-app-photondns | head
+            test -f /usr/share/rpcd/ucode/luci.photondns && echo "ucode backend present: OK"
             echo "VERIFY OK"
           '
 
