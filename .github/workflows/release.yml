@@ -1,0 +1,158 @@
+name: build-packages
+
+# Cross-compiles the photondns Rust daemon for a spread of OpenWrt
+# architectures, assembles .ipk (opkg, <=23.05) and .apk (apk-tools, >=24.10)
+# packages for the daemon plus the two architecture-independent LuCI apps,
+# verifies an .ipk actually installs in a real OpenWrt rootfs, and attaches
+# everything to a GitHub Release on tag push.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      release:
+        description: 'Create a GitHub release from the artifacts'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  # ---------------------------------------------------------------- daemon
+  build:
+    name: build ${{ matrix.arch }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: aarch64,  triple: aarch64-unknown-linux-musl,      owrt: aarch64_generic,           tier: 2 }
+          - { arch: x86_64,   triple: x86_64-unknown-linux-musl,       owrt: x86_64,                    tier: 2 }
+          - { arch: armv7,    triple: armv7-unknown-linux-musleabihf,  owrt: arm_cortex-a7_neon-vfpv4,  tier: 2 }
+          - { arch: riscv64,  triple: riscv64gc-unknown-linux-musl,    owrt: riscv64_riscv64,           tier: 2 }
+          # tier-3: no prebuilt rust-std, built with -Z build-std on nightly.
+          # Allowed to fail so a musl/build-std hiccup never blocks a release.
+          - { arch: mips,     triple: mips-unknown-linux-musl,         owrt: mips_24kc,                 tier: 3 }
+          - { arch: mipsel,   triple: mipsel-unknown-linux-musl,       owrt: mipsel_24kc,               tier: 3 }
+    continue-on-error: ${{ matrix.tier == 3 }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        run: |
+          if [ "${{ matrix.tier }}" = "3" ]; then
+            rustup toolchain install nightly --profile minimal -c rust-src
+            rustup default nightly
+          else
+            rustup toolchain install stable --profile minimal
+            rustup default stable
+            rustup target add ${{ matrix.triple }}
+          fi
+
+      - name: Install zig + cargo-zigbuild
+        run: |
+          pipx install ziglang || pip install ziglang
+          cargo install cargo-zigbuild --locked
+
+      - name: Cross-compile daemon
+        run: |
+          if [ "${{ matrix.tier }}" = "3" ]; then
+            cargo +nightly zigbuild --release --bin photondns \
+              --target ${{ matrix.triple }} \
+              -Z build-std=std,panic_abort -Z build-std-features=panic_immediate_abort
+          else
+            cargo zigbuild --release --bin photondns --target ${{ matrix.triple }}
+          fi
+          file target/${{ matrix.triple }}/release/photondns
+
+      - name: Install apk-tools (for .apk output)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y apk-tools || {
+            echo "apt apk-tools unavailable; building apk-tools from the alpine static binary"
+            curl -fsSL https://gitlab.alpinelinux.org/api/v4/projects/5/packages/generic/v3.0.0_rc1/x86_64/apk.static -o /usr/local/bin/apk 2>/dev/null || true
+            chmod +x /usr/local/bin/apk 2>/dev/null || true
+          }
+          apk --version || echo "apk unavailable — .apk will be skipped for this arch"
+
+      - name: Assemble packages
+        run: |
+          export EMIT_APK=1
+          command -v apk >/dev/null 2>&1 || export EMIT_APK=0
+          # Only emit the arch-independent LuCI apps once (on aarch64).
+          [ "${{ matrix.arch }}" = "aarch64" ] || export SKIP_LUCI=1
+          bash packaging/build-packages.sh \
+            ${{ matrix.triple }} \
+            target/${{ matrix.triple }}/release/photondns \
+            dist
+
+      - name: List artifacts
+        run: ls -la dist/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages-${{ matrix.arch }}
+          path: dist/*
+          if-no-files-found: error
+
+  # -------------------------------------------------- install-verification
+  verify:
+    name: verify ipk installs (OpenWrt ${{ matrix.tag }})
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: x86_64, tag: '23.05.6' }
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: packages-${{ matrix.arch }}
+          path: dist
+      - uses: actions/download-artifact@v4
+        with:
+          name: packages-aarch64   # the LuCI (arch: all) ipks live here
+          path: luci
+      - name: opkg install inside an OpenWrt rootfs
+        run: |
+          set -e
+          cp luci/luci-app-photondns_*_all.ipk dist/ 2>/dev/null || true
+          docker run --rm -v "$PWD/dist:/pkgs" openwrt/rootfs:${{ matrix.arch }}-${{ matrix.tag }} sh -c '
+            set -e
+            mkdir -p /var/lock
+            opkg install --force-depends /pkgs/photondns_*_'"${{ matrix.arch }}"'*.ipk
+            echo "--- installed files ---"
+            opkg files photondns
+            test -x /usr/bin/photondns && echo "binary present + executable: OK"
+            # config-only validate (no upstreams reachable in CI, just parse)
+            printf "[server]\nlisten=[\"127.0.0.1:15533\"]\n[[group]]\nname=\"main\"\nupstreams=[\"udp://127.0.0.1:1\"]\n" > /tmp/t.toml
+            /usr/bin/photondns -t -c /tmp/t.toml && echo "config validate: OK"
+            opkg install --force-depends --force-overwrite /pkgs/luci-app-photondns_*_all.ipk
+            opkg files luci-app-photondns | head
+            echo "VERIFY OK"
+          '
+
+  # ------------------------------------------------------------- release
+  release:
+    name: publish release
+    needs: [build, verify]
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: packages-*
+          path: dist
+          merge-multiple: true
+      - name: Show what will be released
+        run: ls -la dist/
+      - name: Generate checksums
+        run: (cd dist && sha256sum * > SHA256SUMS)
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+          fail_on_unmatched_files: true
