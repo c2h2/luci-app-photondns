@@ -2,167 +2,127 @@
 
 **English** | [简体中文](README.zh-CN.md)
 
-High-performance DNS forwarder for OpenWrt, written in Rust. A from-scratch
-reimagining of [mosdns](https://github.com/sbwml/luci-app-mosdns) focused on
-raw speed and **failover that never makes a client wait**, with a full LuCI
-web UI (`luci-app-photondns`).
+High-performance DNS forwarder written in **Rust**, built for OpenWrt routers
+and fast anywhere Linux runs. Ships with a full LuCI web UI
+(`luci-app-photondns`).
 
-Single static binary, **2.3 MB**, **~5 MB RSS** at runtime.
-
-## Measured performance (Ariaboard photonicat2, rockchip aarch64)
-
-| metric | result |
-|---|---|
-| cached lookups, on-device | **~90,000 qps**, avg 0.35 ms |
-| cache hit latency | 0 ms (dig), TTLs age correctly |
-| cold-start query with *all* primary upstreams dead | answered in **285 ms** via hedged backup |
-| steady-state with dead primaries (breaker open) | **12 ms** |
-| memory | 5.2 MB RSS |
+**2.3 MB static binary · ~5 MB RSS · zero re-encode forwarding · hedged failover**
 
 ## Why it's fast
 
-- **Zero re-encode forwarding**: queries are forwarded as raw wire bytes (only
-  the 2-byte ID is patched); cached responses are byte-copied with in-place
-  ID/TTL/question patching. No DNS message re-serialization anywhere.
-- **Sharded LRU cache** (16 shards, `parking_lot` mutexes) with configurable
-  size; single-digit-µs lookups under concurrency.
-- **Multiplexed upstream connections**: TCP and DoT use RFC 7766 query
-  pipelining over persistent connections; DoH uses an HTTP/1.1 keep-alive
-  pool; UDP uses shared sockets with ID demultiplexing.
-- Multi-socket UDP listeners (`SO_REUSEPORT`) on Linux.
+- **Zero re-encode path** — queries are forwarded as raw wire bytes (only the
+  2-byte ID is patched); cached answers are byte-copied with in-place ID/TTL
+  patching. No DNS message re-serialization anywhere.
+- **High concurrency by design** — tokio multi-threaded runtime, sharded LRU
+  cache (16 shards, `parking_lot`), lock-free per-upstream health/latency
+  stats, multi-socket UDP listeners (`SO_REUSEPORT`) on Linux.
+- **Multiplexed upstreams** — RFC 7766 pipelining over persistent TCP/DoT
+  connections, HTTP keep-alive pool for DoH, shared UDP sockets with ID
+  demultiplexing.
+- **Hedged failover** — upstreams ranked by health + EWMA latency; slow
+  answers are raced against the next-best upstream, circuit breaker + active
+  prober take dead upstreams out of rotation. No client-visible SERVFAIL,
+  even with every primary upstream dead.
 
-## Failover ("blazing fast" by design)
+## Benchmarks — can it do 100k qps? 1M?
 
-Every query runs through a *hedged execution engine*:
+Measured with the bundled `photonrbench` (random domains, cold pass = cache
+misses through the full upstream path, warm pass = cache hits):
 
-1. Upstreams are ranked by health + EWMA latency (per-upstream, lock-free).
-2. The best upstream is asked first. If no answer arrives within the **adaptive
-   hedge delay** (~2× the best upstream's EWMA, capped by `hedge_delay_ms`),
-   the next-best upstream is raced *in parallel*; first good answer wins.
-3. Any hard failure triggers the next candidate immediately.
-4. **Backup upstreams ride along** at the end of the candidate list, so even a
-   cold-start query with every primary dead resolves in one hedge interval —
-   no SERVFAIL, no timeout.
-5. A **circuit breaker** (N consecutive failures → down, cooldown → half-open
-   → M successes → restored) takes dead upstreams out of rotation; an **active
-   health prober** keeps latency stats fresh, detects dead upstreams while
-   idle, and keeps TLS connections warm.
-6. If an upstream's UDP answer is truncated, it is retried over TCP
-   automatically (method fallback).
-7. If *everything* fails, expired cache entries are served as a last resort.
+| platform | scenario | throughput | latency |
+|---|---|---|---|
+| Apple M3 Pro (12C), loopback | single UDP socket, 200k queries | **~105,000 qps** | p50 0.6 ms, p99 1.0 ms |
+| Apple M3 Pro (12C), loopback | 8 sockets × 8 parallel clients | **~276,000 qps** aggregate | p50 1.5 ms |
+| Ariaboard photonicat2 (4×A55 router), on-device | cached lookups | **~90,000 qps** | avg 0.35 ms |
 
-Strategies: `race` (default), `fastest`, `parallel`, `sequential`, `random`.
+So: **100k+ qps — yes**, on a single UDP socket, even router-class ARM
+hardware gets close. **~276k qps** measured on a laptop *with the load
+generator competing for the same 12 cores* — the server alone goes higher.
+**1M qps is extrapolation, not yet measured**: throughput scales per-socket
+(`SO_REUSEPORT` fan-out is linear until CPU saturation), so a many-core
+server with dedicated load generators is projected to reach it. If you
+measure it, open an issue with numbers.
 
-## Feature parity with luci-app-mosdns, and then some
-
-- UDP + TCP listeners, configurable listen address/port
-- Upstreams: `udp://`, `tcp://`, `tls://` (DoT), `https://` (DoH), with
-  bootstrap resolution of DoT/DoH hostnames and `insecure_skip_verify`
-- **Configurable cache size**, min/max TTL clamping, negative-answer TTL
-- **Serve-stale** (lazy cache) + **prefetch** of popular entries before expiry
-- **Cache persistence** across restarts (periodic + on shutdown)
-- Rule files: hosts, block list (NXDOMAIN), redirect, local-domain routing to
-  a separate "local" upstream group
-- **China / non-China split DNS**: one click downloads the
-  dnsmasq-china-list (~110k domains, CN-friendly mirrors); mainland domains
-  resolve via your Local-domain DNS group, everything else via the primary
-  group — per-group query counters in `/stats` show the split live
-- Reject HTTPS/SVCB type-65 queries (optional)
-- Built-in protection: `.local`/`.lan`/RFC-6761 special TLDs and private PTR
-  zones are answered NXDOMAIN locally instead of leaking upstream
-- **Ad blocking**: auto-downloaded lists (anti-AD, Cats-Team AdRules, hosts
-  files...) answered NXDOMAIN, with a LuCI update page and status
-- **Live query log** in LuCI: last N queries (default 5000, in-memory) with
-  client, domain, route taken (cache/stale/hosts/blocked/local/main),
-  winning upstream and latency, filterable and auto-refreshing
-- **Scheduled auto-update** (cron) for the China and ad lists
-- dnsmasq takeover (`redirect`) and firewall DNS hijack (`dns_hijack`) options
-- HTTP JSON API: `/stats`, `/flush`, `/log`, `/health`, `/version` (127.0.0.1)
-- LuCI app: live status dashboard (upstream health, EWMA latency, hedges,
-  cache hit rate), full settings editor, rule file editor, log viewer —
-  bilingual (English / 简体中文)
-
-## Repository layout
-
-```
-src/                    Rust sources (server, cache, upstreams, failover, router, API)
-src/bin/photonbench.rs    single-domain UDP DNS load generator
-src/bin/photonrbench.rs   randomized parallel benchmark (1000 fresh domains/run)
-openwrt/photondns/        OpenWrt package Makefile (SDK build)
-openwrt/luci-app-photondns/  LuCI app: views, rpcd ucode backend, ACL, menu,
-                        UCI schema + procd init that generates the TOML config,
-                        po translations (zh_Hans)
-tools/po2lmo.py         po -> lmo compiler for direct deployments
-test_dns.sh             verbose dig/nslookup test with timing + route info
-deploy.sh               direct-to-device deployment over SSH
-```
-
-## Benchmarking
-
-`photonrbench` generates a fresh set of random domains each run (so the cold
-pass is all cache-misses, exercising the real upstream/failover path), fires
-them through a parallel worker pool, then re-queries the same set warm to
-measure raw cache-serving speed. Reports throughput and p50/p90/p99 latency.
+Reproduce:
 
 ```sh
-photonrbench [server:port] [count] [concurrency]   # defaults 127.0.0.1:15533 1000 50
-#   env: SUFFIX=<domain>  (append a real suffix)   WARM=0  (skip warm phase)
-#        SEED=<n>         (reproducible domain set for A/B comparisons)
+cargo build --release
+./target/release/photondns -c config.toml            # listen 127.0.0.1:15533
+./target/release/photonrbench 127.0.0.1:15533 200000 64
+# photonrbench [server:port] [count] [concurrency]
+# env: SUFFIX=<real-domain>  WARM=0  SEED=<n>
 ```
 
-On the photonicat2 (loopback, no network overhead) a warm run does
-**~55,000 qps at p50 0.5 ms / p99 3 ms**; the cold pass is WAN-bound by the
-upstream RTT, which is the point — it measures the forwarder, not a loop.
+The cold pass exercises the real forwarding/failover path — point the config
+at a local stub upstream unless you want to send N random domains to a
+public resolver.
 
-## Build
+## Features
+
+- UDP + TCP listeners; upstreams: `udp://`, `tcp://`, `tls://` (DoT),
+  `https://` (DoH) with bootstrap resolution
+- Cache: configurable size, TTL clamping, **serve-stale**, **prefetch**,
+  persistence across restarts
+- Failover strategies: `race` (default), `fastest`, `parallel`,
+  `sequential`, `random`; adaptive hedge delay, circuit breaker, health prober
+- Rules: hosts, block (NXDOMAIN), redirect, local-domain routing
+- **China / non-China split DNS** — one click downloads the
+  dnsmasq-china-list (~110k domains); mainland domains resolve via your local
+  group, everything else via the main group
+- **Ad blocking** with auto-updated lists (anti-AD, AdRules, hosts format)
+- **Live query log** in LuCI (client, domain, route, upstream, latency)
+- Special-TLD (`.local`/`.lan`) and private-PTR protection, optional
+  HTTPS/SVCB type-65 rejection
+- HTTP JSON API: `/stats`, `/flush`, `/log`, `/health`, `/version`
+- Bilingual LuCI app (English / 简体中文): live dashboard, settings, rule
+  editor, log viewer; dnsmasq takeover and firewall DNS hijack options
+
+## Quick start
+
+Standalone:
 
 ```sh
-cargo test                                              # unit tests
-cargo build --release                                   # host build
-cargo zigbuild --release --target aarch64-unknown-linux-musl   # OpenWrt aarch64
+cargo build --release
+./target/release/photondns -c config.toml    # -t to validate config
 ```
-
-## Deploy to a device
-
-```sh
-./deploy.sh root@192.168.1.1
-ssh root@192.168.1.1 'uci set photondns.main.enabled=1; uci commit photondns; /etc/init.d/photondns restart'
-dig @192.168.1.1 -p 15533 example.com
-```
-
-Then open LuCI → Services → photondns. To make it the system resolver, enable
-*DNS Forward* (and optionally *DNS Redirect*) in Basic Settings — this
-reconfigures dnsmasq to forward to photondns (original settings are backed up
-and restored when disabled).
-
-## Configuration
-
-`/etc/config/photondns` (UCI) is the source of truth; the init script generates
-`/var/etc/photondns.toml`. The daemon can also be run standalone with a
-hand-written TOML file (`photondns -c config.toml`, `-t` to validate):
 
 ```toml
 [server]
 listen = ["0.0.0.0:15533"]
 
 [cache]
-size = 8192          # entries (the headline knob)
+size = 8192
 serve_stale = true
-prefetch = true
-dump_file = "/etc/photondns/cache.dump"
-
-[failover]
-health_check_interval = 10
-fail_threshold = 3
-cooldown = 15
 
 [[group]]
 name = "main"
 strategy = "race"
 upstreams = ["udp://223.5.5.5", "udp://119.29.29.29"]
 backups = ["tls://8.8.8.8"]
-hedge_delay_ms = 250
-timeout_ms = 2000
+```
+
+OpenWrt (deploys binary + LuCI app over SSH):
+
+```sh
+cargo zigbuild --release --target aarch64-unknown-linux-musl
+./deploy.sh root@192.168.1.1
+ssh root@192.168.1.1 'uci set photondns.main.enabled=1; uci commit photondns; /etc/init.d/photondns restart'
+dig @192.168.1.1 -p 15533 example.com
+```
+
+Then open LuCI → Services → photondns. Enable *DNS Forward* to make it the
+system resolver (dnsmasq settings are backed up and restored).
+
+## Repository layout
+
+```
+src/                       Rust sources (server, cache, upstreams, failover, router, API)
+src/bin/photonbench.rs     single-domain UDP load generator
+src/bin/photonrbench.rs    randomized parallel benchmark
+openwrt/photondns/         OpenWrt package Makefile (SDK build)
+openwrt/luci-app-photondns/         LuCI app (JS + ucode rpcd, UCI schema, procd init)
+openwrt/luci-app-photondns-compat/  legacy Lua/CBI LuCI app for old firmware
+deploy.sh                  direct-to-device deployment over SSH
 ```
 
 ## License

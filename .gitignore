@@ -1,3 +1,5 @@
 /target
 /luci-app-mosdns
 .DS_Store
+__pycache__/
+*.pyc
