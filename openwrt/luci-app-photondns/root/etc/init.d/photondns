@@ -70,7 +70,7 @@ generate_config() {
 	config_list_foreach main upstream append_upstream
 	config_list_foreach main backup_upstream append_backup
 	config_list_foreach main local_upstream append_local
-	[ -z "$upstream_list" ] && upstream_list="\"udp://223.5.5.5\", "
+	[ -z "$upstream_list" ] && upstream_list="\"tcp://1.1.1.1\", "
 
 	local cache_enabled=$(bool_str $cache)
 	local dump_file=""

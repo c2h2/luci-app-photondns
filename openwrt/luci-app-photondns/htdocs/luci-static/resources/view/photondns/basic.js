@@ -42,6 +42,76 @@ const callAdListStatus = rpc.declare({
 	expect: { '': {} }
 });
 
+const callUpdateChinaList = rpc.declare({
+	object: 'luci.photondns',
+	method: 'update_chinalist',
+	expect: { '': {} }
+});
+
+const callUpdateAdList = rpc.declare({
+	object: 'luci.photondns',
+	method: 'update_adlist',
+	expect: { '': {} }
+});
+
+function listStatusText(st) {
+	if (st && st.updating)
+		return E('em', { style: 'color:#c7a500' }, _('Updating...'));
+	if (st && st.exists)
+		return E('strong', {}, _('%d domains, updated %s').format(st.domains,
+			new Date(st.mtime * 1000).toLocaleString()));
+	return E('em', { style: 'color:#d43f3a' }, _('not downloaded yet'));
+}
+
+function renderListStatus(title, callStatus, callUpdate, st) {
+	const statusEl = E('span', {}, [ listStatusText(st) ]);
+
+	const setStatus = s => {
+		statusEl.innerHTML = '';
+		statusEl.appendChild(listStatusText(s));
+	};
+
+	const waitDone = () => new Promise(resolve => {
+		const tick = () => L.resolveDefault(callStatus(), {}).then(s => {
+			if (s && s.updating) return;
+			poll.remove(tick);
+			setStatus(s);
+			resolve(s);
+		});
+		poll.add(tick, 2);
+	});
+
+	const btn = E('button', {
+		class: 'btn cbi-button-apply',
+		style: 'margin-left:12px',
+		click: ui.createHandlerFn(null, () => callUpdate().then(res => {
+			if (!res || !res.success) {
+				ui.addNotification(null, E('p', _('Update failed to start: %s')
+					.format((res && res.error) || '?')), 'error');
+				return;
+			}
+			setStatus({ updating: true });
+			return waitDone().then(s => {
+				if (s && s.exists) {
+					btn.textContent = _('Update Now');
+					ui.addNotification(null, E('p',
+						_('%s: %d domains.').format(title, s.domains || 0)), 'info');
+				} else {
+					ui.addNotification(null, E('p',
+						_('Download failed - check the log on the List Updates page.')), 'error');
+				}
+			});
+		}))
+	}, (st && st.exists) ? _('Update Now') : _('Download Now'));
+
+	if (st && st.updating) {
+		btn.disabled = true;
+		waitDone().then(() => { btn.disabled = false; });
+	}
+
+	return E('div', {}, [ statusEl, btn ]);
+}
+
 return view.extend({
 	load() {
 		return Promise.all([uci.load('photondns')]);
@@ -72,7 +142,7 @@ return view.extend({
 
 		s.tab('basic', _('Basic Options'));
 		s.tab('upstream', _('Upstreams'));
-		s.tab('failover', _('Failover'));
+		s.tab('failover', _('Failover & Advanced'));
 		s.tab('cache', _('Cache'));
 		s.tab('adblock', _('Ad Block'));
 
@@ -144,56 +214,38 @@ return view.extend({
 		o.depends('auto_update', '1');
 
 		/* ---- upstream ---- */
-		o = s.taboption('upstream', form.DynamicList, 'upstream', _('Primary DNS servers'),
-			_('Formats: 1.2.3.4, udp://host, tcp://host, tls://host (DoT), https://host/dns-query (DoH)'));
+		o = s.taboption('upstream', form.ListValue, 'china_list', _('Routing mode'),
+			_('Split mode resolves mainland-China domains (dnsmasq-china-list, ~70k entries) via the China DNS group and everything else via the overseas group'));
+		o.value('1', _('China / overseas split DNS (recommended)'));
+		o.value('0', _('Single group - all domains use the same servers'));
+		o.default = '1';
+		o.rmempty = false;
+
+		o = s.taboption('upstream', form.DynamicList, 'local_upstream', _('China DNS servers'),
+			_('Used for mainland-China domains and the Local Domains rule file'));
 		o.value('udp://223.5.5.5', _('AliDNS (UDP 223.5.5.5)'));
 		o.value('udp://119.29.29.29', _('Tencent DNSPod (UDP 119.29.29.29)'));
 		o.value('udp://114.114.114.114', _('114DNS (UDP)'));
 		o.value('tls://223.5.5.5', _('AliDNS (DoT)'));
 		o.value('tls://1.12.12.12', _('DNSPod (DoT)'));
-		o.value('https://223.5.5.5/dns-query', _('AliDNS (DoH)'));
-		o.value('tls://8.8.8.8', _('Google (DoT)'));
-		o.value('tls://1.1.1.1', _('Cloudflare (DoT)'));
-		o.value('https://dns.google/dns-query', _('Google (DoH)'));
-		o.rmempty = false;
-
-		o = s.taboption('upstream', form.DynamicList, 'backup_upstream', _('Backup DNS servers'),
-			_('Only used when primary servers fail; also raced as a last hedge candidate'));
-		o.value('tls://8.8.8.8', _('Google (DoT)'));
-		o.value('tls://1.1.1.1', _('Cloudflare (DoT)'));
-		o.value('udp://9.9.9.9', _('Quad9 (UDP)'));
-
-		o = s.taboption('upstream', form.DynamicList, 'local_upstream', _('Local-domain DNS servers'),
-			_('Optional group used for domains listed in the local_domains rule file (e.g. China DNS)'));
-		o.value('udp://223.5.5.5', _('AliDNS (UDP 223.5.5.5)'));
-		o.value('udp://119.29.29.29', _('Tencent DNSPod (UDP 119.29.29.29)'));
-
-		o = s.taboption('upstream', form.Flag, 'china_list', _('China domain list (split DNS)'),
-			_('Route mainland-China domains to the Local-domain DNS servers, everything else to the primary servers. Uses the dnsmasq-china-list (~70k domains).'));
-		o.default = false;
-		o.depends({ local_upstream: /./ });
+		o.default = 'udp://223.5.5.5';
+		o.depends('china_list', '1');
 
 		o = s.taboption('upstream', form.DummyValue, '_chinalist_status', _('China list status'));
 		o.depends('china_list', '1');
-		o.cfgvalue = () => L.resolveDefault(callChinaListStatus(), {}).then(st => {
-			if (!st || !st.exists)
-				return _('not downloaded yet - use the List Updates page to download it');
-			return _('%d domains, updated %s').format(st.domains,
-				new Date(st.mtime * 1000).toLocaleString());
-		});
+		o.cfgvalue = () => L.resolveDefault(callChinaListStatus(), {}).then(st =>
+			renderListStatus(_('China Domain List'), callChinaListStatus, callUpdateChinaList, st));
 
-		o = s.taboption('upstream', form.Value, 'bootstrap_dns', _('Bootstrap DNS'),
-			_('Plain DNS server used to resolve DoT/DoH hostnames'));
-		o.default = '223.5.5.5';
-
-		o = s.taboption('upstream', form.Flag, 'insecure_skip_verify', _('Disable TLS verification'),
-			_('Skip DoT/DoH certificate validation (useful if the system clock/CA store is broken)'));
-		o.default = false;
-
-		o = s.taboption('upstream', form.Value, 'idle_timeout', _('Connection idle timeout (s)'),
-			_('How long pooled TCP/DoT/DoH connections stay open'));
-		o.datatype = 'and(uinteger,min(5))';
-		o.default = '30';
+		o = s.taboption('upstream', form.DynamicList, 'upstream', _('Overseas DNS servers'),
+			_('Used for all other domains (all domains in single-group mode). Formats: 1.2.3.4, udp://host, tcp://host, tls://host (DoT), https://host/dns-query (DoH)'));
+		o.value('tcp://1.1.1.1', _('Cloudflare (TCP)'));
+		o.value('tls://1.1.1.1', _('Cloudflare (DoT)'));
+		o.value('tcp://8.8.8.8', _('Google (TCP)'));
+		o.value('tls://8.8.8.8', _('Google (DoT)'));
+		o.value('https://dns.google/dns-query', _('Google (DoH)'));
+		o.value('udp://9.9.9.9', _('Quad9 (UDP)'));
+		o.default = 'tcp://1.1.1.1';
+		o.rmempty = false;
 
 		/* ---- adblock ---- */
 		o = s.taboption('adblock', form.Flag, 'adblock', _('Enable DNS ad blocking'),
@@ -212,12 +264,8 @@ return view.extend({
 
 		o = s.taboption('adblock', form.DummyValue, '_adlist_status', _('Ad list status'));
 		o.depends('adblock', '1');
-		o.cfgvalue = () => L.resolveDefault(callAdListStatus(), {}).then(st => {
-			if (!st || !st.exists)
-				return _('not downloaded yet - use the List Updates page to download it');
-			return _('%d domains, updated %s').format(st.domains,
-				new Date(st.mtime * 1000).toLocaleString());
-		});
+		o.cfgvalue = () => L.resolveDefault(callAdListStatus(), {}).then(st =>
+			renderListStatus(_('Ad Block Lists'), callAdListStatus, callUpdateAdList, st));
 
 		/* ---- failover ---- */
 		o = s.taboption('failover', form.ListValue, 'strategy', _('Strategy'),
@@ -261,6 +309,26 @@ return view.extend({
 			_('How long a down upstream is excluded before a half-open retry'));
 		o.datatype = 'and(uinteger,min(1))';
 		o.default = '15';
+
+		o = s.taboption('failover', form.DynamicList, 'backup_upstream', _('Backup DNS servers'),
+			_('Only used when primary servers fail; also raced as a last hedge candidate'));
+		o.value('tls://223.5.5.5', _('AliDNS (DoT)'));
+		o.value('tls://8.8.8.8', _('Google (DoT)'));
+		o.value('tls://1.1.1.1', _('Cloudflare (DoT)'));
+		o.value('udp://9.9.9.9', _('Quad9 (UDP)'));
+
+		o = s.taboption('failover', form.Value, 'bootstrap_dns', _('Bootstrap DNS'),
+			_('Plain DNS server used to resolve DoT/DoH hostnames'));
+		o.default = '223.5.5.5';
+
+		o = s.taboption('failover', form.Flag, 'insecure_skip_verify', _('Disable TLS verification'),
+			_('Skip DoT/DoH certificate validation (useful if the system clock/CA store is broken)'));
+		o.default = false;
+
+		o = s.taboption('failover', form.Value, 'idle_timeout', _('Connection idle timeout (s)'),
+			_('How long pooled TCP/DoT/DoH connections stay open'));
+		o.datatype = 'and(uinteger,min(5))';
+		o.default = '30';
 
 		/* ---- cache ---- */
 		o = s.taboption('cache', form.Flag, 'cache', _('Enable DNS cache'));

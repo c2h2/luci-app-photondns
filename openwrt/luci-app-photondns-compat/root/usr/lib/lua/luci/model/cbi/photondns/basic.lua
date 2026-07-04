@@ -1,6 +1,82 @@
 -- Basic Settings (CBI) — legacy port of basic.js
 local m, s, o
 
+-- inline list status + download/update button; polls the controller's JSON
+-- endpoints (api/listupdate, api/liststatus) the same way the modern JS app
+-- polls rpcd
+local function list_widget(which, file)
+	local fs = require "nixio.fs"
+	local disp = require "luci.dispatcher"
+	local st = fs.stat(file)
+	local status_html
+	if st then
+		local n = tonumber((luci.sys.exec("wc -l < " .. file .. " 2>/dev/null") or ""):match("%d+")) or 0
+		status_html = string.format("<strong>%s</strong>",
+			translatef("%d domains, updated %s", n, os.date("%Y-%m-%d %H:%M:%S", st.mtime)))
+	else
+		status_html = string.format("<em style=\"color:#d43f3a\">%s</em>", translate("not downloaded yet"))
+	end
+	local btn_label = st and translate("Update Now") or translate("Download Now")
+	local upd_url = disp.build_url("admin/services/photondns/api/listupdate") .. "?list=" .. which
+	local st_url = disp.build_url("admin/services/photondns/api/liststatus") .. "?list=" .. which
+	local script = [==[
+<script type="text/javascript">//<![CDATA[
+if (!window.photondnsListUpdate) {
+	window.photondnsI18n = {
+		updating: ']==] .. translate("Updating...") .. [==[',
+		done: ']==] .. translate("%d domains, updated %s") .. [==[',
+		fail: ']==] .. translate("Download failed - check the log on the List Updates page.") .. [==[',
+		startfail: ']==] .. translate("Update failed to start: %s") .. [==[',
+		updatenow: ']==] .. translate("Update Now") .. [==['
+	};
+	window.photondnsListUpdate = function(key, updUrl, stUrl) {
+		var I = window.photondnsI18n;
+		var btn = document.getElementById(key + '_btn');
+		var span = document.getElementById(key + '_st');
+		var G = function(url, cb) {
+			var x = new XMLHttpRequest();
+			x.open('GET', url, true);
+			x.onreadystatechange = function() {
+				if (x.readyState != 4) return;
+				var d = null;
+				try { d = JSON.parse(x.responseText); } catch (e) {}
+				cb(d);
+			};
+			x.send(null);
+		};
+		btn.disabled = true;
+		G(updUrl, function(res) {
+			if (!res || !res.success) {
+				btn.disabled = false;
+				alert(I.startfail.replace('%s', (res && res.error) || '?'));
+				return;
+			}
+			span.innerHTML = '<em style="color:#c7a500">' + I.updating + '</em>';
+			var t = setInterval(function() {
+				G(stUrl, function(st) {
+					if (!st || st.updating) return;
+					clearInterval(t);
+					btn.disabled = false;
+					if (st.exists) {
+						btn.value = I.updatenow;
+						span.innerHTML = '<strong>' + I.done.replace('%d', st.domains)
+							.replace('%s', new Date(st.mtime * 1000).toLocaleString()) + '</strong>';
+					} else {
+						span.innerHTML = '<em style="color:#d43f3a">' + I.fail + '</em>';
+					}
+				});
+			}, 2000);
+		});
+	};
+}
+//]]></script>]==]
+	return string.format(
+		'<span id="%s_st">%s</span>' ..
+		'<input type="button" class="cbi-button cbi-button-apply" id="%s_btn" ' ..
+		'style="margin-left:12px" value="%s" onclick="photondnsListUpdate(\'%s\',\'%s\',\'%s\')" />%s',
+		which, status_html, which, btn_label, which, upd_url, st_url, script)
+end
+
 m = Map("photondns", translate("photondns"),
 	translate("High-performance DNS forwarder written in Rust: configurable cache, serve-stale, prefetch, " ..
 		"and adaptive failover that races multiple upstreams (UDP/TCP/DoT/DoH) and takes the fastest answer."))
@@ -15,7 +91,7 @@ s.anonymous = true
 
 s:tab("basic",    translate("Basic Options"))
 s:tab("upstream", translate("Upstreams"))
-s:tab("failover", translate("Failover"))
+s:tab("failover", translate("Failover & Advanced"))
 s:tab("cache",    translate("Cache"))
 s:tab("adblock",  translate("Ad Block"))
 
@@ -87,59 +163,40 @@ o.default = "4"
 o:depends("auto_update", "1")
 
 ---- upstream ----
-o = s:taboption("upstream", DynamicList, "upstream", translate("Primary DNS servers"),
-	translate("Formats: 1.2.3.4, udp://host, tcp://host, tls://host (DoT), https://host/dns-query (DoH)"))
+o = s:taboption("upstream", ListValue, "china_list", translate("Routing mode"),
+	translate("Split mode resolves mainland-China domains (dnsmasq-china-list, ~70k entries) via the China DNS group and everything else via the overseas group"))
+o:value("1", translate("China / overseas split DNS (recommended)"))
+o:value("0", translate("Single group - all domains use the same servers"))
+o.default = "1"
+o.rmempty = false
+
+o = s:taboption("upstream", DynamicList, "local_upstream", translate("China DNS servers"),
+	translate("Used for mainland-China domains and the Local Domains rule file"))
 o:value("udp://223.5.5.5", translate("AliDNS (UDP 223.5.5.5)"))
 o:value("udp://119.29.29.29", translate("Tencent DNSPod (UDP 119.29.29.29)"))
 o:value("udp://114.114.114.114", translate("114DNS (UDP)"))
 o:value("tls://223.5.5.5", translate("AliDNS (DoT)"))
 o:value("tls://1.12.12.12", translate("DNSPod (DoT)"))
-o:value("https://223.5.5.5/dns-query", translate("AliDNS (DoH)"))
-o:value("tls://8.8.8.8", translate("Google (DoT)"))
-o:value("tls://1.1.1.1", translate("Cloudflare (DoT)"))
-o:value("https://dns.google/dns-query", translate("Google (DoH)"))
-o.rmempty = false
-
-o = s:taboption("upstream", DynamicList, "backup_upstream", translate("Backup DNS servers"),
-	translate("Only used when primary servers fail; also raced as a last hedge candidate"))
-o:value("tls://8.8.8.8", translate("Google (DoT)"))
-o:value("tls://1.1.1.1", translate("Cloudflare (DoT)"))
-o:value("udp://9.9.9.9", translate("Quad9 (UDP)"))
-
-o = s:taboption("upstream", DynamicList, "local_upstream", translate("Local-domain DNS servers"),
-	translate("Optional group used for domains listed in the local_domains rule file (e.g. China DNS)"))
-o:value("udp://223.5.5.5", translate("AliDNS (UDP 223.5.5.5)"))
-o:value("udp://119.29.29.29", translate("Tencent DNSPod (UDP 119.29.29.29)"))
-
-o = s:taboption("upstream", Flag, "china_list", translate("China domain list (split DNS)"),
-	translate("Route mainland-China domains to the Local-domain DNS servers, everything else to the primary servers. Uses the dnsmasq-china-list (~70k domains)."))
-o.default = "0"
+o.default = "udp://223.5.5.5"
+o:depends("china_list", "1")
 
 o = s:taboption("upstream", DummyValue, "_chinalist_status", translate("China list status"))
 o:depends("china_list", "1")
 o.rawhtml = true
 o.cfgvalue = function(self, section)
-	local fs = require "nixio.fs"
-	local st = fs.stat("/etc/photondns/china_list.txt")
-	if not st then
-		return translate("not downloaded yet - use the List Updates page to download it")
-	end
-	local n = tonumber((luci.sys.exec("wc -l < /etc/photondns/china_list.txt 2>/dev/null") or ""):match("%d+")) or 0
-	return string.format("%d domains, updated %s", n, os.date("%Y-%m-%d %H:%M:%S", st.mtime))
+	return list_widget("chinalist", "/etc/photondns/china_list.txt")
 end
 
-o = s:taboption("upstream", Value, "bootstrap_dns", translate("Bootstrap DNS"),
-	translate("Plain DNS server used to resolve DoT/DoH hostnames"))
-o.default = "223.5.5.5"
-
-o = s:taboption("upstream", Flag, "insecure_skip_verify", translate("Disable TLS verification"),
-	translate("Skip DoT/DoH certificate validation (useful if the system clock/CA store is broken)"))
-o.default = "0"
-
-o = s:taboption("upstream", Value, "idle_timeout", translate("Connection idle timeout (s)"),
-	translate("How long pooled TCP/DoT/DoH connections stay open"))
-o.datatype = "and(uinteger,min(5))"
-o.default = "30"
+o = s:taboption("upstream", DynamicList, "upstream", translate("Overseas DNS servers"),
+	translate("Used for all other domains (all domains in single-group mode). Formats: 1.2.3.4, udp://host, tcp://host, tls://host (DoT), https://host/dns-query (DoH)"))
+o:value("tcp://1.1.1.1", translate("Cloudflare (TCP)"))
+o:value("tls://1.1.1.1", translate("Cloudflare (DoT)"))
+o:value("tcp://8.8.8.8", translate("Google (TCP)"))
+o:value("tls://8.8.8.8", translate("Google (DoT)"))
+o:value("https://dns.google/dns-query", translate("Google (DoH)"))
+o:value("udp://9.9.9.9", translate("Quad9 (UDP)"))
+o.default = "tcp://1.1.1.1"
+o.rmempty = false
 
 ---- adblock ----
 o = s:taboption("adblock", Flag, "adblock", translate("Enable DNS ad blocking"),
@@ -160,13 +217,7 @@ o = s:taboption("adblock", DummyValue, "_adlist_status", translate("Ad list stat
 o:depends("adblock", "1")
 o.rawhtml = true
 o.cfgvalue = function(self, section)
-	local fs = require "nixio.fs"
-	local st = fs.stat("/etc/photondns/ad_list.txt")
-	if not st then
-		return translate("not downloaded yet - use the List Updates page to download it")
-	end
-	local n = tonumber((luci.sys.exec("wc -l < /etc/photondns/ad_list.txt 2>/dev/null") or ""):match("%d+")) or 0
-	return string.format("%d domains, updated %s", n, os.date("%Y-%m-%d %H:%M:%S", st.mtime))
+	return list_widget("adlist", "/etc/photondns/ad_list.txt")
 end
 
 ---- failover ----
@@ -211,6 +262,26 @@ o = s:taboption("failover", Value, "cooldown", translate("Cooldown (s)"),
 	translate("How long a down upstream is excluded before a half-open retry"))
 o.datatype = "and(uinteger,min(1))"
 o.default = "15"
+
+o = s:taboption("failover", DynamicList, "backup_upstream", translate("Backup DNS servers"),
+	translate("Only used when primary servers fail; also raced as a last hedge candidate"))
+o:value("tls://223.5.5.5", translate("AliDNS (DoT)"))
+o:value("tls://8.8.8.8", translate("Google (DoT)"))
+o:value("tls://1.1.1.1", translate("Cloudflare (DoT)"))
+o:value("udp://9.9.9.9", translate("Quad9 (UDP)"))
+
+o = s:taboption("failover", Value, "bootstrap_dns", translate("Bootstrap DNS"),
+	translate("Plain DNS server used to resolve DoT/DoH hostnames"))
+o.default = "223.5.5.5"
+
+o = s:taboption("failover", Flag, "insecure_skip_verify", translate("Disable TLS verification"),
+	translate("Skip DoT/DoH certificate validation (useful if the system clock/CA store is broken)"))
+o.default = "0"
+
+o = s:taboption("failover", Value, "idle_timeout", translate("Connection idle timeout (s)"),
+	translate("How long pooled TCP/DoT/DoH connections stay open"))
+o.datatype = "and(uinteger,min(5))"
+o.default = "30"
 
 ---- cache ----
 o = s:taboption("cache", Flag, "cache", translate("Enable DNS cache"))

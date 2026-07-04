@@ -202,6 +202,39 @@ msgstr ""
 msgid "Primary DNS servers"
 msgstr ""
 
+msgid "Routing mode"
+msgstr ""
+
+msgid "Split mode resolves mainland-China domains (dnsmasq-china-list, ~70k entries) via the China DNS group and everything else via the overseas group"
+msgstr ""
+
+msgid "China / overseas split DNS (recommended)"
+msgstr ""
+
+msgid "Single group - all domains use the same servers"
+msgstr ""
+
+msgid "China DNS servers"
+msgstr ""
+
+msgid "Used for mainland-China domains and the Local Domains rule file"
+msgstr ""
+
+msgid "Overseas DNS servers"
+msgstr ""
+
+msgid "Used for all other domains (all domains in single-group mode). Formats: 1.2.3.4, udp://host, tcp://host, tls://host (DoT), https://host/dns-query (DoH)"
+msgstr ""
+
+msgid "Cloudflare (TCP)"
+msgstr ""
+
+msgid "Google (TCP)"
+msgstr ""
+
+msgid "Failover & Advanced"
+msgstr ""
+
 msgid "Formats: 1.2.3.4, udp://host, tcp://host, tls://host (DoT), https://host/dns-query (DoH)"
 msgstr ""
 
@@ -407,6 +440,12 @@ msgid "List file"
 msgstr ""
 
 msgid "Update Now"
+msgstr ""
+
+msgid "Download Now"
+msgstr ""
+
+msgid "Download failed - check the log on the List Updates page."
 msgstr ""
 
 msgid "Updating..."
