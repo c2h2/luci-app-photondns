@@ -57,10 +57,43 @@ The cold pass exercises the real forwarding/failover path — point the config
 at a local stub upstream unless you want to send N random domains to a
 public resolver.
 
+## Recent changes (July 2026)
+
+- **DoH server** — new `[server] doh_listen` serves RFC 8484
+  (GET `?dns=` / POST `application/dns-message`) alongside UDP/TCP.
+  Two hosting modes: plain HTTP behind a TLS reverse proxy
+  (Caddy: `reverse_proxy /dns-query 127.0.0.1:8054`) or native HTTPS with
+  `doh_cert`/`doh_key` PEM files. UDP and TCP listeners are now individually
+  toggleable (`server.udp` / `server.tcp`), all exposed in LuCI too.
+- **Retry round** — when an entire first hedged round fails fast (resets,
+  REFUSED), one retry runs over the full upstream set *including backups*
+  within the same overall deadline. Previously `parallel` groups could
+  SERVFAIL without ever trying their backups.
+- **Serve-stale reliability** — fixed two leaks that could leave a cache
+  entry permanently flagged as "refresh in progress" (it would then serve
+  ever-older stale data until full expiry); a refresh that returns an
+  uncacheable answer (e.g. TTL 0) now evicts the stale entry instead.
+- **Failover tuning** — the health prober now uses the group's query timeout
+  (was a hardcoded 1.5 s), so high-latency international upstreams no longer
+  flap DOWN on brief spikes; default query timeout raised 2000 → 5000 ms.
+- **Defaults** — ad blocking is now off by default in the packaged config.
+- **Versioning** — builds are stamped `0.x.z-rN` (N = git commit count),
+  reported by `-V`, `/version` and `/stats`.
+- **`/resolve` API + test page** — dig-like JSON diagnostics through the real
+  pipeline: route taken, winning upstream, rcode, answers, latency.
+- **New tooling** — `run_standalone.sh` (build & run locally with a generated
+  config, no OpenWrt needed), `tools/tricky-tests.sh` (26 edge-case checks
+  against a live server: 0x20 case echo, TC→TCP fallback, negative cache,
+  special-TLD/PTR blocking, bursts...), `tools/compare-dns.py` (resolve N
+  random Tranco domains via independent DoH references and via your server,
+  store both result sets, grade mismatches with PTR-based CDN detection).
+
 ## Features
 
-- UDP + TCP listeners; upstreams: `udp://`, `tcp://`, `tls://` (DoT),
-  `https://` (DoH) with bootstrap resolution
+- UDP + TCP + **DoH server** (RFC 8484) listeners, each toggleable; DoH runs
+  plain-HTTP behind a reverse proxy (Caddy/nginx) or native TLS with a PEM
+  cert. Upstreams: `udp://`, `tcp://`, `tls://` (DoT), `https://` (DoH) with
+  bootstrap resolution
 - Cache: configurable size, TTL clamping, **serve-stale**, **prefetch**,
   persistence across restarts
 - Failover strategies: `race` (default), `fastest`, `parallel`,
@@ -73,13 +106,22 @@ public resolver.
 - **Live query log** in LuCI (client, domain, route, upstream, latency)
 - Special-TLD (`.local`/`.lan`) and private-PTR protection, optional
   HTTPS/SVCB type-65 rejection
-- HTTP JSON API: `/stats`, `/flush`, `/log`, `/health`, `/version`
+- HTTP JSON API: `/stats`, `/flush`, `/log`, `/health`, `/version`,
+  `/resolve?name=…&type=…` (dig-like diagnostics with route + upstream)
 - Bilingual LuCI app (English / 简体中文): live dashboard, settings, rule
   editor, log viewer; dnsmasq takeover and firewall DNS hijack options
 
 ## Quick start
 
-Standalone:
+Standalone (one command — builds if needed, generates a demo config with DoT
+upstreams and a plain-HTTP DoH listener on `127.0.0.1:8054`):
+
+```sh
+./run_standalone.sh                          # Ctrl-C to stop
+dig @127.0.0.1 -p 15533 example.com
+```
+
+Or manually:
 
 ```sh
 cargo build --release
@@ -89,6 +131,9 @@ cargo build --release
 ```toml
 [server]
 listen = ["0.0.0.0:15533"]
+udp = true
+tcp = true
+doh_listen = "127.0.0.1:8054"   # "" = off; add doh_cert/doh_key for native TLS
 
 [cache]
 size = 8192
@@ -100,6 +145,18 @@ strategy = "race"
 upstreams = ["udp://223.5.5.5", "udp://119.29.29.29"]
 backups = ["tls://8.8.8.8"]
 ```
+
+To publish the DoH endpoint for browsers, either front it with Caddy:
+
+```
+dns.example.com {
+    reverse_proxy /dns-query 127.0.0.1:8054
+}
+```
+
+or serve TLS natively: `doh_cert = "/path/fullchain.pem"`,
+`doh_key = "/path/key.pem"`, then
+`curl --doh-url https://dns.example.com/dns-query https://example.org`.
 
 OpenWrt — prebuilt packages (recommended). Each
 [release](https://github.com/c2h2/luci-app-photondns/releases) ships
@@ -136,6 +193,9 @@ openwrt/photondns/         OpenWrt package Makefile (SDK build)
 openwrt/luci-app-photondns/         LuCI app (JS + ucode rpcd, UCI schema, procd init)
 openwrt/luci-app-photondns-compat/  legacy Lua/CBI LuCI app for old firmware
 deploy.sh                  direct-to-device deployment over SSH
+run_standalone.sh          build & run locally with a generated config
+tools/tricky-tests.sh      edge-case battery against a live server
+tools/compare-dns.py       cross-check answers vs independent DoH references
 ```
 
 ## License

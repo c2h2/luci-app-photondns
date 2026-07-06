@@ -49,10 +49,36 @@ cargo build --release
 冷测会走真实转发/故障切换路径 —— 除非你想把大量随机域名发给公共 DNS，
 否则请把配置指向本地测试上游。
 
+## 近期更新（2026 年 7 月）
+
+- **DoH 服务端** — 新增 `[server] doh_listen`，按 RFC 8484 提供
+  DNS-over-HTTPS（GET `?dns=` / POST `application/dns-message`）。
+  两种部署方式：纯 HTTP 挂在反向代理后面
+  （Caddy：`reverse_proxy /dns-query 127.0.0.1:8054`），或配置
+  `doh_cert`/`doh_key` PEM 文件由 photondns 直接提供 HTTPS。
+  UDP / TCP 监听现在可分别开关（`server.udp` / `server.tcp`），
+  LuCI 界面同步支持。
+- **失败重试** — 首轮对冲全部快速失败（连接重置、REFUSED）时，
+  在同一总超时内对全部上游（含备用）再跑一轮。
+- **serve-stale 可靠性修复** — 修复两处会让缓存条目永久卡在
+  “刷新中”状态的泄漏（导致持续返回越来越旧的过期数据）；
+  刷新结果不可缓存（如 TTL 0）时改为直接淘汰旧条目。
+- **故障切换调优** — 健康探测超时由固定 1.5 秒改为跟随组查询超时，
+  高延迟国际上游不再因瞬时抖动被联动标记下线；
+  默认查询超时 2000 → 5000 毫秒。
+- **默认配置** — 广告拦截默认关闭。
+- **版本号** — 构建时自动嵌入 `0.x.z-rN`（N = git 提交数）。
+- **`/resolve` API + 测试页** — 走真实解析管线的 dig 风格 JSON 诊断。
+- **新工具** — `run_standalone.sh`（本机一键构建运行）、
+  `tools/tricky-tests.sh`（26 项边界用例实测）、
+  `tools/compare-dns.py`（随机域名与独立 DoH 参照源交叉比对）。
+
 ## 功能
 
-- UDP + TCP 监听；上游支持 `udp://`、`tcp://`、`tls://`（DoT）、
-  `https://`（DoH），DoT/DoH 域名自动 bootstrap 解析
+- UDP + TCP + **DoH 服务端**（RFC 8484）监听，均可单独开关；DoH 可挂在
+  反向代理（Caddy/nginx）后面或用 PEM 证书原生 TLS。上游支持 `udp://`、
+  `tcp://`、`tls://`（DoT）、`https://`（DoH），DoT/DoH 域名自动
+  bootstrap 解析
 - 缓存：容量可配、TTL 钳制、**过期兜底（serve-stale）**、**热点预取**、
   重启后持久化
 - 故障切换策略：`race`（默认）、`fastest`、`parallel`、`sequential`、
@@ -64,13 +90,22 @@ cargo build --release
 - LuCI **实时查询日志**（客户端、域名、路由、上游、延迟）
 - 特殊 TLD（`.local`/`.lan`）与内网 PTR 保护，可选拒绝 HTTPS/SVCB
   type-65 查询
-- HTTP JSON API：`/stats`、`/flush`、`/log`、`/health`、`/version`
+- HTTP JSON API：`/stats`、`/flush`、`/log`、`/health`、`/version`、
+  `/resolve?name=…&type=…`（dig 风格诊断，显示路由与胜出上游）
 - 双语 LuCI 应用（English / 简体中文）：实时仪表盘、设置、规则编辑器、
   日志查看器；支持 dnsmasq 接管与防火墙 DNS 劫持
 
 ## 快速开始
 
-独立运行：
+独立运行（一条命令：自动构建并生成演示配置，含 DoT 上游与
+`127.0.0.1:8054` 上的纯 HTTP DoH 监听）：
+
+```sh
+./run_standalone.sh                          # Ctrl-C 停止
+dig @127.0.0.1 -p 15533 example.com
+```
+
+或手动：
 
 ```sh
 cargo build --release
@@ -80,6 +115,9 @@ cargo build --release
 ```toml
 [server]
 listen = ["0.0.0.0:15533"]
+udp = true
+tcp = true
+doh_listen = "127.0.0.1:8054"   # "" 表示关闭；配 doh_cert/doh_key 则原生 TLS
 
 [cache]
 size = 8192
