@@ -136,7 +136,7 @@ fn stats_json(ctx: &Arc<Ctx>) -> serde_json::Value {
         })
         .collect();
     json!({
-        "version": env!("CARGO_PKG_VERSION"),
+        "version": env!("PHOTONDNS_VERSION"),
         "uptime": s.uptime(),
         "groups": groups,
         "queries": {
@@ -242,7 +242,7 @@ pub async fn run(ctx: Arc<Ctx>, listen: String) -> Result<()> {
                     "/health" => ("200 OK", json!({"status": "ok"}).to_string()),
                     "/version" => (
                         "200 OK",
-                        json!({"version": env!("CARGO_PKG_VERSION")}).to_string(),
+                        json!({"version": env!("PHOTONDNS_VERSION")}).to_string(),
                     ),
                     "/flush" => {
                         let flushed = if let Some(c) = &ctx.cache {

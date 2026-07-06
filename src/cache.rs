@@ -125,6 +125,10 @@ impl DnsCache {
         }
     }
 
+    pub fn remove(&self, key: &CacheKey) {
+        self.shard(key).lock().map.pop(key);
+    }
+
     pub fn insert(&self, key: CacheKey, entry: CacheEntry) {
         let mut shard = self.shard(&key).lock();
         if shard.map.len() == shard.map.cap().get() && !shard.map.contains(&key) {

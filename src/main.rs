@@ -17,7 +17,7 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 
 fn usage() -> ! {
-    eprintln!("photondns {} - high-performance DNS forwarder", env!("CARGO_PKG_VERSION"));
+    eprintln!("photondns {} - high-performance DNS forwarder", env!("PHOTONDNS_VERSION"));
     eprintln!("usage: photondns [-c /etc/photondns/config.toml] [-t] [-V]");
     eprintln!("  -c <file>  config file (TOML)");
     eprintln!("  -t         test configuration and exit");
@@ -34,7 +34,7 @@ fn main() -> Result<()> {
             "-c" | "--config" => config_path = args.next().unwrap_or_else(|| usage()),
             "-t" | "--test" => test_only = true,
             "-V" | "--version" | "version" => {
-                println!("photondns {}", env!("CARGO_PKG_VERSION"));
+                println!("photondns {}", env!("PHOTONDNS_VERSION"));
                 return Ok(());
             }
             _ => usage(),
@@ -66,7 +66,7 @@ fn main() -> Result<()> {
 async fn run(cfg: config::Config) -> Result<()> {
     log::info!(
         "photondns {} starting (cache: {} entries, {} groups)",
-        env!("CARGO_PKG_VERSION"),
+        env!("PHOTONDNS_VERSION"),
         if cfg.cache.enabled { cfg.cache.size } else { 0 },
         cfg.groups.len()
     );

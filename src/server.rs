@@ -58,14 +58,15 @@ fn unix_now() -> u64 {
 }
 
 /// Clamp TTLs, extract cache metadata and store the response.
-fn cache_store(ctx: &Ctx, key: cache::CacheKey, resp: &mut Vec<u8>, question_end: usize) {
-    let Some(cache) = &ctx.cache else { return };
+/// Returns false when the response is not cacheable (nothing was stored).
+fn cache_store(ctx: &Ctx, key: cache::CacheKey, resp: &mut Vec<u8>, question_end: usize) -> bool {
+    let Some(cache) = &ctx.cache else { return false };
     dns::clamp_ttls(resp, question_end, ctx.cfg.cache.min_ttl, ctx.cfg.cache.max_ttl);
     let Some(info) = dns::cache_info(resp, question_end, ctx.cfg.cache.negative_ttl) else {
-        return;
+        return false;
     };
     if info.ttl == 0 {
-        return;
+        return false;
     }
     let stale_ttl = if ctx.cfg.cache.serve_stale || ctx.cfg.cache.stale_ttl > 0 {
         ctx.cfg.cache.stale_ttl
@@ -86,6 +87,7 @@ fn cache_store(ctx: &Ctx, key: cache::CacheKey, resp: &mut Vec<u8>, question_end
             stored_unix: unix_now(),
         },
     );
+    true
 }
 
 /// Forward to the right group and fill the cache. Returns the response with
@@ -115,12 +117,16 @@ fn maybe_refresh(ctx: &Arc<Ctx>, entry: &CacheEntry, meta: &dns::QueryMeta, key:
         .compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed)
         .is_ok()
     {
-        let _ = ctx.refresh_tx.try_send(RefreshJob {
+        let sent = ctx.refresh_tx.try_send(RefreshJob {
             key: key.clone(),
             qname: meta.qname.clone(),
             qtype: meta.qtype,
             qclass: meta.qclass,
         });
+        if sent.is_err() {
+            // queue full: release the flag or the entry can never refresh again
+            entry.refreshing.store(false, Ordering::Release);
+        }
     }
 }
 
@@ -487,14 +493,21 @@ pub fn spawn_refresher(ctx: Arc<Ctx>, mut rx: mpsc::Receiver<RefreshJob>) {
                 match group.resolve(&q, &ctx.stats).await {
                     Ok((mut resp, _winner)) => {
                         // find question_end of the *response*
-                        if let Some(rmeta) = dns::parse_query(&resp) {
-                            if rmeta.qname == job.qname {
-                                cache_store(&ctx, job.key.clone(), &mut resp, rmeta.question_end);
-                                log::debug!("refreshed {}", job.qname);
-                                return;
+                        match dns::parse_query(&resp) {
+                            Some(rmeta) if rmeta.qname == job.qname => {
+                                if cache_store(&ctx, job.key.clone(), &mut resp, rmeta.question_end) {
+                                    log::debug!("refreshed {}", job.qname);
+                                } else {
+                                    // upstream answered but the response is not
+                                    // cacheable (e.g. TTL 0): drop the old entry
+                                    // instead of serving ever-older stale data
+                                    if let Some(cache) = &ctx.cache {
+                                        cache.remove(&job.key);
+                                    }
+                                }
                             }
+                            _ => clear_refreshing(&ctx, &job.key),
                         }
-                        clear_refreshing(&ctx, &job.key);
                     }
                     Err(e) => {
                         log::debug!("refresh {} failed: {}", job.qname, e);

@@ -230,6 +230,9 @@ pub fn spawn_prober(groups: Vec<Arc<Group>>, fo: &FailoverCfg) {
         tokio::time::sleep(Duration::from_millis(500)).await;
         loop {
             for g in &groups {
+                // give probes the same budget as real queries; a hard 1.5s cap
+                // flaps high-latency (international) upstreams on brief spikes
+                let timeout = g.timeout;
                 for u in g.all_upstreams() {
                     let u = u.clone();
                     let q = match crate::dns::build_query(&domain, crate::dns::TYPE_A, 1) {
@@ -237,7 +240,7 @@ pub fn spawn_prober(groups: Vec<Arc<Group>>, fo: &FailoverCfg) {
                         None => continue,
                     };
                     tokio::spawn(async move {
-                        let deadline = Instant::now() + Duration::from_millis(1500);
+                        let deadline = Instant::now() + timeout;
                         let _ = u.query_measured(&q, deadline, ft, rt, cooldown).await;
                     });
                 }
