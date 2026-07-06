@@ -34,6 +34,14 @@ pub struct RefreshJob {
     qclass: u16,
 }
 
+/// How the client query arrived. Only UDP answers are size-limited (TC).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Transport {
+    Udp,
+    Tcp,
+    Doh,
+}
+
 impl Ctx {
     pub fn group(&self, name: &str) -> &Arc<Group> {
         self.groups
@@ -134,7 +142,7 @@ fn maybe_refresh(ctx: &Arc<Ctx>, entry: &CacheEntry, meta: &dns::QueryMeta, key:
 pub async fn handle_query(
     ctx: &Arc<Ctx>,
     query: &[u8],
-    via_tcp: bool,
+    transport: Transport,
     client: IpAddr,
 ) -> Option<Vec<u8>> {
     if query.len() < dns::HEADER_LEN || dns::is_response(query) {
@@ -144,11 +152,11 @@ pub async fn handle_query(
     let stats = &ctx.stats;
     stats.total.fetch_add(1, Ordering::Relaxed);
     stats.rate.incr();
-    if via_tcp {
-        stats.tcp.fetch_add(1, Ordering::Relaxed);
-    } else {
-        stats.udp.fetch_add(1, Ordering::Relaxed);
-    }
+    match transport {
+        Transport::Udp => stats.udp.fetch_add(1, Ordering::Relaxed),
+        Transport::Tcp => stats.tcp.fetch_add(1, Ordering::Relaxed),
+        Transport::Doh => stats.doh.fetch_add(1, Ordering::Relaxed),
+    };
 
     let Some(meta) = dns::parse_query(query) else {
         let mut r = query[..dns::HEADER_LEN].to_vec();
@@ -202,13 +210,13 @@ pub async fn handle_query(
                         maybe_refresh(ctx, &entry, &meta, &key);
                     }
                     qlog("cache", "");
-                    return Some(finish(&entry.make_response(query, &meta, now), query, &meta, via_tcp));
+                    return Some(finish(&entry.make_response(query, &meta, now), query, &meta, transport));
                 }
                 Freshness::Stale if ctx.cfg.cache.serve_stale => {
                     stats.stale_served.fetch_add(1, Ordering::Relaxed);
                     maybe_refresh(ctx, &entry, &meta, &key);
                     qlog("stale", "");
-                    return Some(finish(&entry.make_response(query, &meta, now), query, &meta, via_tcp));
+                    return Some(finish(&entry.make_response(query, &meta, now), query, &meta, transport));
                 }
                 Freshness::Stale => {
                     // serve-stale disabled: try upstream, fall back to stale on failure
@@ -216,12 +224,12 @@ pub async fn handle_query(
                     return match resolve_upstream(ctx, query, &meta, &key).await {
                         Ok((resp, group, winner)) => {
                             qlog(&group, &winner);
-                            Some(finish(&resp, query, &meta, via_tcp))
+                            Some(finish(&resp, query, &meta, transport))
                         }
                         Err(_) => {
                             stats.stale_served.fetch_add(1, Ordering::Relaxed);
                             qlog("stale", "");
-                            Some(finish(&entry.make_response(query, &meta, now), query, &meta, via_tcp))
+                            Some(finish(&entry.make_response(query, &meta, now), query, &meta, transport))
                         }
                     };
                 }
@@ -234,7 +242,7 @@ pub async fn handle_query(
     match resolve_upstream(ctx, query, &meta, &key).await {
         Ok((resp, group, winner)) => {
             qlog(&group, &winner);
-            Some(finish(&resp, query, &meta, via_tcp))
+            Some(finish(&resp, query, &meta, transport))
         }
         Err(e) => {
             log::debug!("resolve {} failed: {}", meta.qname, e);
@@ -357,8 +365,8 @@ pub async fn resolve_named(ctx: &Arc<Ctx>, name: &str, qtype: u16) -> Result<Res
 }
 
 /// UDP size guard: replace oversized UDP answers with a TC probe.
-fn finish(resp: &[u8], query: &[u8], meta: &dns::QueryMeta, via_tcp: bool) -> Vec<u8> {
-    if !via_tcp && resp.len() > meta.udp_size as usize {
+fn finish(resp: &[u8], query: &[u8], meta: &dns::QueryMeta, transport: Transport) -> Vec<u8> {
+    if transport == Transport::Udp && resp.len() > meta.udp_size as usize {
         return dns::build_truncated(query, meta.question_end);
     }
     resp.to_vec()
@@ -411,7 +419,7 @@ pub async fn run_udp(ctx: Arc<Ctx>, addr: SocketAddr) -> Result<()> {
                         let ctx = ctx.clone();
                         let sock = sock.clone();
                         tokio::spawn(async move {
-                            if let Some(resp) = handle_query(&ctx, &query, false, peer.ip()).await {
+                            if let Some(resp) = handle_query(&ctx, &query, Transport::Udp, peer.ip()).await {
                                 let _ = sock.send_to(&resp, peer).await;
                             }
                         });
@@ -465,7 +473,7 @@ pub async fn run_tcp(ctx: Arc<Ctx>, addr: SocketAddr) -> Result<()> {
                     let ctx = ctx.clone();
                     let wr = wr.clone();
                     tokio::spawn(async move {
-                        if let Some(resp) = handle_query(&ctx, &qbuf, true, peer.ip()).await {
+                        if let Some(resp) = handle_query(&ctx, &qbuf, Transport::Tcp, peer.ip()).await {
                             let mut frame = Vec::with_capacity(resp.len() + 2);
                             frame.extend_from_slice(&(resp.len() as u16).to_be_bytes());
                             frame.extend_from_slice(&resp);

@@ -158,6 +158,39 @@ return view.extend({
 		o.datatype = 'port';
 		o.default = '15533';
 
+		o = s.taboption('basic', form.Flag, 'udp', _('Listen on UDP'),
+			_('Serve classic DNS over UDP on the listen port'));
+		o.default = '1';
+		o.rmempty = false;
+
+		o = s.taboption('basic', form.Flag, 'tcp', _('Listen on TCP'),
+			_('Serve DNS over TCP on the listen port (needed for large answers)'));
+		o.default = '1';
+		o.rmempty = false;
+
+		o = s.taboption('basic', form.Flag, 'doh', _('DoH Server'),
+			_('Serve DNS-over-HTTPS (RFC 8484) on the DoH port. Runs plain HTTP unless a certificate ' +
+			  'is set below - put a TLS reverse proxy (Caddy/nginx) in front, or set cert + key to serve HTTPS directly'));
+		o.default = false;
+		o.rmempty = false;
+
+		o = s.taboption('basic', form.Value, 'doh_port', _('DoH Port'));
+		o.datatype = 'port';
+		o.default = '8054';
+		o.depends('doh', '1');
+
+		o = s.taboption('basic', form.Value, 'doh_path', _('DoH Path'));
+		o.default = '/dns-query';
+		o.depends('doh', '1');
+
+		o = s.taboption('basic', form.Value, 'doh_cert', _('DoH TLS Certificate'),
+			_('Path to a PEM certificate chain; leave empty when behind a reverse proxy'));
+		o.depends('doh', '1');
+
+		o = s.taboption('basic', form.Value, 'doh_key', _('DoH TLS Key'),
+			_('Path to the PEM private key'));
+		o.depends('doh', '1');
+
 		o = s.taboption('basic', form.ListValue, 'log_level', _('Log Level'));
 		o.value('debug', _('Debug'));
 		o.value('info', _('Info'));

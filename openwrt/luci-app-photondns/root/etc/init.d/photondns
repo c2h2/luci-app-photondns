@@ -13,6 +13,13 @@ get_config() {
 	config_get enabled $1 enabled 0
 	config_get listen_address $1 listen_address "0.0.0.0"
 	config_get listen_port $1 listen_port 15533
+	config_get udp $1 udp 1
+	config_get tcp $1 tcp 1
+	config_get doh $1 doh 0
+	config_get doh_port $1 doh_port 8054
+	config_get doh_path $1 doh_path "/dns-query"
+	config_get doh_cert $1 doh_cert ""
+	config_get doh_key $1 doh_key ""
 	config_get log_level $1 log_level "info"
 	config_get log_file $1 log_file "/var/log/photondns.log"
 	config_get api_port $1 api_port 8053
@@ -85,11 +92,19 @@ generate_config() {
 	[ "$adblock" = "1" ] && [ -f "$RULE_DIR/ad_list.txt" ] && \
 		ad_list_file="$RULE_DIR/ad_list.txt"
 
+	local doh_listen=""
+	[ "$doh" = "1" ] && doh_listen="$listen_address:$doh_port"
+
 	cat > $CONF <<-EOF
 	# generated from /etc/config/photondns - do not edit
 	[server]
 	listen = ["$listen_address:$listen_port"]
-	tcp = true
+	udp = $(bool_str $udp)
+	tcp = $(bool_str $tcp)
+	doh_listen = "$doh_listen"
+	doh_path = "$doh_path"
+	doh_cert = "$doh_cert"
+	doh_key = "$doh_key"
 
 	[cache]
 	enabled = $cache_enabled

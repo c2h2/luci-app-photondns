@@ -143,6 +143,7 @@ fn stats_json(ctx: &Arc<Ctx>) -> serde_json::Value {
             "total": s.total.load(Ordering::Relaxed),
             "udp": s.udp.load(Ordering::Relaxed),
             "tcp": s.tcp.load(Ordering::Relaxed),
+            "doh": s.doh.load(Ordering::Relaxed),
             "qpm": s.rate.last_minute(),
             "blocked": s.blocked.load(Ordering::Relaxed),
             "hosts": s.hosts_served.load(Ordering::Relaxed),

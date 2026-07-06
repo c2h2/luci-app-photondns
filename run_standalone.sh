@@ -6,13 +6,23 @@
 #   with no argument a demo config is generated (DoT upstreams, cache on,
 #   listen 127.0.0.1:15533, API http://127.0.0.1:8053).
 #
-# env:  LISTEN=127.0.0.1:15533  API=127.0.0.1:8053  REBUILD=1
+# env:  LISTEN=127.0.0.1:15533  API=127.0.0.1:8053  DOH=127.0.0.1:8054  REBUILD=1
+#       DOH=""       disable the DoH listener
+#       DOH_CERT=/path/fullchain.pem DOH_KEY=/path/key.pem   serve native https
+#
+# DoH behind Caddy instead of native TLS:
+#   dns.example.com {
+#       reverse_proxy /dns-query 127.0.0.1:8054
+#   }
 set -e
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
 BIN="$DIR/target/release/photondns"
 LISTEN="${LISTEN:-127.0.0.1:15533}"
 API="${API:-127.0.0.1:8053}"
+DOH="${DOH-127.0.0.1:8054}"
+DOH_CERT="${DOH_CERT:-}"
+DOH_KEY="${DOH_KEY:-}"
 
 export PATH="$HOME/.cargo/bin:$PATH"
 
@@ -30,6 +40,13 @@ if [ -z "$CONF" ]; then
 	# the local network (e.g. router-level DNS interception).
 	[server]
 	listen = ["$LISTEN"]
+	udp = true
+	tcp = true
+	# DoH server (RFC 8484): plain HTTP here - front with Caddy/nginx for TLS,
+	# or set doh_cert/doh_key to PEM files to serve https natively.
+	doh_listen = "$DOH"
+	doh_cert = "$DOH_CERT"
+	doh_key = "$DOH_KEY"
 
 	[api]
 	listen = "$API"
@@ -48,4 +65,13 @@ fi
 PORT="${LISTEN##*:}"
 echo "==> try:  dig @${LISTEN%%:*} -p $PORT github.com"
 echo "==> api:  curl http://$API/stats"
+if [ -n "$DOH" ]; then
+	if [ -n "$DOH_CERT" ]; then
+		echo "==> doh:  curl --doh-url https://$DOH/dns-query https://example.org"
+	else
+		# curl --doh-url requires https; test plain-HTTP DoH with a raw POST,
+		# or front it with:  caddy reverse-proxy --from dns.example.com --to $DOH
+		echo "==> doh:  curl -s -H 'content-type: application/dns-message' --data-binary @query.bin http://$DOH/dns-query"
+	fi
+fi
 exec "$BIN" -c "$CONF"

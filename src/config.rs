@@ -27,12 +27,26 @@ pub struct ServerCfg {
     #[serde(default = "default_listen")]
     pub listen: Vec<String>,
     #[serde(default = "default_true")]
+    pub udp: bool,
+    #[serde(default = "default_true")]
     pub tcp: bool,
     /// parallel UDP sockets per address (SO_REUSEPORT); 0 = auto
     #[serde(default)]
     pub udp_sockets: usize,
     #[serde(default = "default_tcp_idle")]
     pub tcp_idle_timeout: u64,
+    /// DoH (RFC 8484) server listener, e.g. "0.0.0.0:8054"; "" = disabled.
+    /// Plain HTTP unless doh_cert/doh_key are set - put Caddy/nginx in front
+    /// for TLS, or give it a cert to serve https directly.
+    #[serde(default)]
+    pub doh_listen: String,
+    #[serde(default = "default_doh_path")]
+    pub doh_path: String,
+    /// PEM cert chain + key: serve native TLS (standalone DoH)
+    #[serde(default)]
+    pub doh_cert: String,
+    #[serde(default)]
+    pub doh_key: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -185,6 +199,9 @@ fn default_true() -> bool {
 fn default_tcp_idle() -> u64 {
     30
 }
+fn default_doh_path() -> String {
+    "/dns-query".into()
+}
 fn default_cache_size() -> usize {
     8192
 }
@@ -310,6 +327,12 @@ impl Config {
         }
         if cfg.cache.size == 0 {
             cfg.cache.enabled = false;
+        }
+        if !cfg.server.udp && !cfg.server.tcp && cfg.server.doh_listen.is_empty() {
+            anyhow::bail!("no listeners: enable server.udp, server.tcp or set server.doh_listen");
+        }
+        if cfg.server.doh_cert.is_empty() != cfg.server.doh_key.is_empty() {
+            anyhow::bail!("server.doh_cert and server.doh_key must be set together");
         }
         Ok(cfg)
     }

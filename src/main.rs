@@ -2,6 +2,7 @@ mod api;
 mod cache;
 mod config;
 mod dns;
+mod doh;
 mod group;
 mod health;
 mod logger;
@@ -115,10 +116,15 @@ async fn run(cfg: config::Config) -> Result<()> {
         let addr: std::net::SocketAddr = addr_str
             .parse()
             .with_context(|| format!("bad listen address '{}'", addr_str))?;
-        server::run_udp(ctx.clone(), addr).await?;
+        if ctx.cfg.server.udp {
+            server::run_udp(ctx.clone(), addr).await?;
+        }
         if ctx.cfg.server.tcp {
             server::run_tcp(ctx.clone(), addr).await?;
         }
+    }
+    if !ctx.cfg.server.doh_listen.is_empty() {
+        doh::run(ctx.clone()).await?;
     }
 
     if !ctx.cfg.api.listen.is_empty() {

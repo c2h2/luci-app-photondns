@@ -107,6 +107,38 @@ o = s:taboption("basic", Value, "listen_port", translate("Listen Port"))
 o.datatype = "port"
 o.default = "15533"
 
+o = s:taboption("basic", Flag, "udp", translate("Listen on UDP"),
+	translate("Serve classic DNS over UDP on the listen port"))
+o.default = "1"
+o.rmempty = false
+
+o = s:taboption("basic", Flag, "tcp", translate("Listen on TCP"),
+	translate("Serve DNS over TCP on the listen port (needed for large answers)"))
+o.default = "1"
+o.rmempty = false
+
+o = s:taboption("basic", Flag, "doh", translate("DoH Server"),
+	translate("Serve DNS-over-HTTPS (RFC 8484) on the DoH port. Runs plain HTTP unless a certificate is set below - put a TLS reverse proxy (Caddy/nginx) in front, or set cert + key to serve HTTPS directly"))
+o.default = "0"
+o.rmempty = false
+
+o = s:taboption("basic", Value, "doh_port", translate("DoH Port"))
+o.datatype = "port"
+o.default = "8054"
+o:depends("doh", "1")
+
+o = s:taboption("basic", Value, "doh_path", translate("DoH Path"))
+o.default = "/dns-query"
+o:depends("doh", "1")
+
+o = s:taboption("basic", Value, "doh_cert", translate("DoH TLS Certificate"),
+	translate("Path to a PEM certificate chain; leave empty when behind a reverse proxy"))
+o:depends("doh", "1")
+
+o = s:taboption("basic", Value, "doh_key", translate("DoH TLS Key"),
+	translate("Path to the PEM private key"))
+o:depends("doh", "1")
+
 o = s:taboption("basic", ListValue, "log_level", translate("Log Level"))
 o:value("debug", translate("Debug"))
 o:value("info", translate("Info"))
