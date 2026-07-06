@@ -30,7 +30,7 @@ get_config() {
 	config_get dump_interval $1 dump_interval 3600
 	config_get strategy $1 strategy "race"
 	config_get hedge_delay $1 hedge_delay 250
-	config_get query_timeout $1 query_timeout 2000
+	config_get query_timeout $1 query_timeout 5000
 	config_get health_check_interval $1 health_check_interval 10
 	config_get health_check_domain $1 health_check_domain "www.gstatic.com"
 	config_get fail_threshold $1 fail_threshold 3

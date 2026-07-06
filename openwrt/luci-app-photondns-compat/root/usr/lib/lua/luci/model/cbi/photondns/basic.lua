@@ -238,7 +238,7 @@ o.default = "250"
 
 o = s:taboption("failover", Value, "query_timeout", translate("Query timeout (ms)"))
 o.datatype = "and(uinteger,min(100))"
-o.default = "2000"
+o.default = "5000"
 
 o = s:taboption("failover", Value, "health_check_interval", translate("Health check interval (s)"),
 	translate("Active probes keep latency stats fresh and detect dead upstreams even when idle"))

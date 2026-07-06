@@ -285,7 +285,7 @@ return view.extend({
 
 		o = s.taboption('failover', form.Value, 'query_timeout', _('Query timeout (ms)'));
 		o.datatype = 'and(uinteger,min(100))';
-		o.default = '2000';
+		o.default = '5000';
 
 		o = s.taboption('failover', form.Value, 'health_check_interval', _('Health check interval (s)'),
 			_('Active probes keep latency stats fresh and detect dead upstreams even when idle'));

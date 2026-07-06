@@ -149,15 +149,47 @@ impl Group {
     }
 
     /// Resolve and return (response, winning upstream address).
+    /// If the whole first round fails fast (broken pipes, REFUSED, ...) one
+    /// retry round runs over the full upstream set (backups included) within
+    /// the same overall deadline.
     pub async fn resolve(&self, query: &[u8], stats: &Stats) -> Result<(Vec<u8>, String)> {
         self.queries.fetch_add(1, Ordering::Relaxed);
-        let cands = self.candidates();
+        let overall_deadline = Instant::now() + self.timeout * 2;
+        match self
+            .run_attempts(query, self.candidates(), overall_deadline, stats)
+            .await
+        {
+            Ok(win) => Ok(win),
+            Err(e) if Instant::now() < overall_deadline => {
+                let mut all: Vec<_> = self
+                    .all_upstreams()
+                    .filter(|u| u.state.is_available())
+                    .cloned()
+                    .collect();
+                if all.is_empty() {
+                    all = self.all_upstreams().cloned().collect();
+                }
+                all.sort_by_key(|u| u.state.ewma_us_or_default());
+                log::debug!("group {}: first round failed ({}), retrying", self.name, e);
+                self.run_attempts(query, all, overall_deadline, stats).await
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    /// One hedged round over `cands`.
+    async fn run_attempts(
+        &self,
+        query: &[u8],
+        cands: Vec<Arc<Upstream>>,
+        overall_deadline: Instant,
+        stats: &Stats,
+    ) -> Result<(Vec<u8>, String)> {
         if cands.is_empty() {
             bail!("group {}: no upstreams", self.name);
         }
         let max_attempts = cands.len().min(3);
         let hedge = self.hedge_for(cands[0].state.ewma_us_or_default());
-        let overall_deadline = Instant::now() + self.timeout * 2;
 
         let mut inflight = FuturesUnordered::new();
         let mut next = 0usize;

@@ -240,7 +240,7 @@ fn default_hedge_delay() -> u64 {
     250
 }
 fn default_timeout() -> u64 {
-    2000
+    5000
 }
 fn default_bootstrap() -> String {
     "223.5.5.5:53".into()
