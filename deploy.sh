@@ -1,6 +1,9 @@
 #!/bin/sh
 # Deploy photondns + LuCI app to an OpenWrt device over SSH.
-# usage: ./deploy.sh [root@192.168.1.1] [target-triple] [luci-flavor]
+# usage: ./deploy.sh [--reset] [root@192.168.1.1] [target-triple] [luci-flavor]
+#   --reset  full-wipe photondns state on the device BEFORE deploying: UCI config,
+#            all rule files, downloaded china/ad lists, cache dump and log. The
+#            packaged defaults are then re-seeded, giving a fresh-install state.
 #   target-triple defaults to aarch64-unknown-linux-musl (photonicat2);
 #     use x86_64-unknown-linux-musl for x86/64 devices (e.g. the 192.168.1.4 gateway).
 #   luci-flavor: auto (default) | modern | compat | none
@@ -8,6 +11,12 @@
 #     compat = legacy Lua/CBI app for old LuCI without the JS client (luci-app-photondns-compat)
 #     auto   = probe the device and pick modern if /www/luci-static/resources/rpc.js exists
 set -e
+
+RESET=0
+if [ "$1" = "--reset" ]; then
+	RESET=1
+	shift
+fi
 
 HOST="${1:-root@192.168.1.1}"
 TARGET="${2:-aarch64-unknown-linux-musl}"
@@ -37,6 +46,26 @@ fi
 # ---- common: binary, init, shell scripts, config/rule seed ----
 echo "==> copying core files to $HOST"
 $SSH "$HOST" "mkdir -p /usr/share/rpcd/acl.d /etc/photondns; /etc/init.d/photondns stop 2>/dev/null; true"
+
+# ---- optional: full-wipe existing state so defaults get re-seeded ----
+if [ "$RESET" = "1" ]; then
+	echo "==> --reset: wiping all photondns settings/state on $HOST"
+	$SSH "$HOST" sh <<'EOF'
+# service is already stopped above; drop cron + fw4 hijack chain it installed
+[ -x /etc/init.d/photondns ] && /etc/init.d/photondns disable 2>/dev/null
+[ -x /sbin/fw4 ] && nft delete table inet photondns 2>/dev/null
+rm -f /etc/crontabs/root.photondns 2>/dev/null
+sed -i '/photondns/d' /etc/crontabs/root 2>/dev/null
+# uci config + generated runtime toml + log
+rm -f /etc/config/photondns /var/etc/photondns.toml /var/log/photondns.log
+# rule files, downloaded lists, cache dump, locks
+rm -f /etc/photondns/hosts.txt /etc/photondns/block.txt \
+	/etc/photondns/local_domains.txt /etc/photondns/redirect.txt \
+	/etc/photondns/china_list.txt /etc/photondns/ad_list.txt \
+	/etc/photondns/cache.dump /etc/photondns/redirect.lock
+true
+EOF
+fi
 $SCP "$BIN" "$HOST:/usr/bin/photondns"
 [ -f "$BENCH" ] && $SCP "$BENCH" "$HOST:/usr/bin/photonbench"
 [ -f "$RBENCH" ] && $SCP "$RBENCH" "$HOST:/usr/bin/photonrbench"

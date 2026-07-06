@@ -13,6 +13,7 @@
 		"write": {
 			"uci": [ "photondns" ],
 			"file": {
+				"/etc/init.d/photondns": [ "exec" ],
 				"/etc/photondns/*": [ "write" ],
 				"/var/log/photondns*.log": [ "write" ]
 			}

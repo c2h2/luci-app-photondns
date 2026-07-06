@@ -5,7 +5,9 @@
 	<%:High-performance Rust DNS forwarder with caching and adaptive multi-path failover.%>
 </div>
 
-<div style="margin:8px 0">
+<div style="margin:8px 0; display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+	<button class="btn" id="photondns_toggle"><%:Loading...%></button>
+	<span id="photondns_toggle_pill" style="padding:1px 8px; border-radius:8px; color:#fff; background:#6c757d"></span>
 	<button class="btn cbi-button-apply" id="photondns_flush"><%:Flush DNS Cache%></button>
 	<span id="photondns_flush_msg" style="margin-left:10px"></span>
 </div>
@@ -16,6 +18,8 @@
 (function() {
 	var statsUrl = '<%=luci.dispatcher.build_url("admin/services/photondns/api/stats")%>';
 	var flushUrl = '<%=luci.dispatcher.build_url("admin/services/photondns/api/flush")%>';
+	var stateUrl = '<%=luci.dispatcher.build_url("admin/services/photondns/api/servicestate")%>';
+	var toggleUrl = '<%=luci.dispatcher.build_url("admin/services/photondns/api/servicetoggle")%>';
 
 	function esc(s) {
 		return String(s == null ? '' : s)
@@ -96,6 +100,40 @@
 		html += '</table>';
 		el.innerHTML = html;
 	}
+
+	var svcEnabled = false;
+	function paintToggle() {
+		var btn = document.getElementById('photondns_toggle');
+		var pill = document.getElementById('photondns_toggle_pill');
+		if (!btn || !pill) return;
+		if (svcEnabled) {
+			btn.innerHTML = '<%:Turn Off%>';
+			btn.className = 'btn cbi-button-remove';
+			pill.style.background = '#2ca02c';
+			pill.innerHTML = '<%:Service enabled%>';
+		} else {
+			btn.innerHTML = '<%:Turn On%>';
+			btn.className = 'btn cbi-button-add';
+			pill.style.background = '#6c757d';
+			pill.innerHTML = '<%:Service disabled%>';
+		}
+	}
+	function refreshState() {
+		XHR.get(stateUrl, null, function(x, d) {
+			if (d) { svcEnabled = !!d.enabled; paintToggle(); }
+		});
+	}
+	document.getElementById('photondns_toggle').onclick = function() {
+		var want = svcEnabled ? '0' : '1';
+		var btn = this;
+		btn.disabled = true;
+		XHR.get(toggleUrl, { enable: want }, function(x, d) {
+			btn.disabled = false;
+			if (d && d.success) { svcEnabled = !!d.enabled; paintToggle(); }
+			else alert('<%:Could not change service state.%>');
+		});
+	};
+	refreshState();
 
 	document.getElementById('photondns_flush').onclick = function() {
 		var msg = document.getElementById('photondns_flush_msg');

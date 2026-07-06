@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>photondns · resolve test</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+         max-width: 760px; margin: 2.5rem auto; padding: 0 1rem; }
+  h1 { font-size: 1.25rem; margin: 0 0 .25rem; }
+  .sub { opacity: .65; margin: 0 0 1.25rem; font-size: .9rem; }
+  form { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
+  input, select, button { font: inherit; padding: .45rem .6rem; border-radius: 6px;
+    border: 1px solid #8884; background: Canvas; color: CanvasText; }
+  input[name=name] { flex: 1 1 240px; }
+  button { cursor: pointer; background: #0d6efd; color: #fff; border-color: #0d6efd; }
+  button:disabled { opacity: .5; cursor: default; }
+  .cfg { margin: .5rem 0 1.25rem; font-size: .82rem; opacity: .8; }
+  .cfg input { padding: .25rem .4rem; }
+  #out { margin-top: 1.25rem; }
+  .card { border: 1px solid #8883; border-radius: 10px; padding: 1rem 1.15rem; margin-bottom: .8rem; }
+  .row { display: grid; grid-template-columns: 92px 1fr; gap: .35rem .8rem; align-items: baseline; }
+  .k { opacity: .6; }
+  .v { font-variant-numeric: tabular-nums; word-break: break-all; }
+  .ans { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  .badge { display: inline-block; padding: 1px 8px; border-radius: 8px; color: #fff; font-size: .82rem; }
+  .err { color: #d43f3a; }
+  .muted { opacity: .5; }
+  .spin { display: inline-block; animation: sp 1s linear infinite; }
+  @keyframes sp { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+  <h1>photondns · resolve</h1>
+  <p class="sub">Like <code>dig</code>, in a page — shows the answer, which route
+    served it, the winning upstream, and how long it took.</p>
+
+  <form id="f">
+    <input name="name" placeholder="example.com" autocomplete="off" autofocus required>
+    <select name="type">
+      <option>A</option><option>AAAA</option><option>CNAME</option>
+      <option>MX</option><option>TXT</option><option>NS</option>
+      <option>SOA</option><option>PTR</option><option>SRV</option>
+      <option>CAA</option><option>HTTPS</option><option>ANY</option>
+    </select>
+    <button type="submit">Resolve</button>
+  </form>
+
+  <div class="cfg">
+    API base:
+    <input id="api" size="30" placeholder="http://ROUTER-IP:8053">
+    <span class="muted">— the photondns HTTP API (default port 8053, on the device).</span>
+  </div>
+
+  <div id="out"></div>
+
+<script>
+const ROUTE_COLORS = {
+  cache: '#2ca02c', stale: '#17a2b8', hosts: '#7952b3', blocked: '#d43f3a',
+  redirect: '#6c757d', servfail: '#8b0000', failed: '#8b0000',
+  local: '#e67e22', main: '#0d6efd'
+};
+
+const $ = s => document.querySelector(s);
+const out = $('#out'), apiInput = $('#api');
+
+// Remember the API base; default to same host on :8053 if served over http,
+// else leave blank so the user fills it in.
+apiInput.value = localStorage.getItem('photondns_api') ||
+  (location.protocol.startsWith('http') ? location.protocol + '//' + location.hostname + ':8053' : '');
+apiInput.addEventListener('change', () => localStorage.setItem('photondns_api', apiInput.value.trim()));
+
+function badge(route) {
+  const c = ROUTE_COLORS[route] || '#0d6efd';
+  return `<span class="badge" style="background:${c}">${route}</span>`;
+}
+
+function render(d, ms) {
+  if (d.error) {
+    out.innerHTML = `<div class="card err">Error: ${d.error}</div>`;
+    return;
+  }
+  const answers = (d.answers && d.answers.length)
+    ? d.answers.map(a => `<div class="ans">${a}</div>`).join('')
+    : `<span class="muted">(no ${d.type} records)</span>`;
+  out.innerHTML = `<div class="card">
+    <div class="row">
+      <div class="k">Query</div><div class="v">${d.name} &nbsp;<b>${d.type}</b></div>
+      <div class="k">Status</div><div class="v">${d.rcode || '-'}</div>
+      <div class="k">Route</div><div class="v">${badge(d.route)}</div>
+      <div class="k">Upstream</div><div class="v">${d.upstream || '<span class="muted">— (answered locally)</span>'}</div>
+      <div class="k">TTL</div><div class="v">${d.ttl != null ? d.ttl + 's' : '-'}</div>
+      <div class="k">Time</div><div class="v">${d.elapsed_ms != null ? d.elapsed_ms + ' ms' : '-'} <span class="muted">(round-trip ${ms} ms)</span></div>
+      <div class="k">Answer</div><div class="v">${answers}</div>
+    </div></div>`;
+}
+
+$('#f').addEventListener('submit', async ev => {
+  ev.preventDefault();
+  const base = apiInput.value.trim().replace(/\/$/, '');
+  if (!base) { out.innerHTML = '<div class="card err">Set the API base URL first (e.g. http://192.168.1.1:8053).</div>'; return; }
+  const name = $('input[name=name]').value.trim();
+  const type = $('select[name=type]').value;
+  const btn = $('button'); btn.disabled = true;
+  out.innerHTML = '<div class="card muted"><span class="spin">◔</span> resolving…</div>';
+  const t0 = performance.now();
+  try {
+    const url = `${base}/resolve?name=${encodeURIComponent(name)}&type=${type}`;
+    const r = await fetch(url, { cache: 'no-store' });
+    const d = await r.json();
+    render(d, (performance.now() - t0).toFixed(1));
+  } catch (e) {
+    out.innerHTML = `<div class="card err">Request failed: ${e.message}.<br>
+      <span class="muted">Check the API base URL, that photondns is running with an
+      <code>[api] listen</code> set to a reachable address, and that this page can
+      reach it (CORS is allowed by the server).</span></div>`;
+  } finally { btn.disabled = false; }
+});
+</script>
+</body>
+</html>

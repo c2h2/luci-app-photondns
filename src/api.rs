@@ -4,13 +4,103 @@
 //!   GET /flush   clear the cache
 //!   GET /version
 
-use crate::server::Ctx;
+use crate::server::{resolve_named, Ctx};
 use anyhow::Result;
 use serde_json::json;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
+
+/// Percent-decode a query-string value (enough for domain names: %XX + '+').
+fn urldecode(s: &str) -> String {
+    let b = s.as_bytes();
+    let mut out = String::with_capacity(s.len());
+    let mut i = 0;
+    while i < b.len() {
+        match b[i] {
+            b'+' => {
+                out.push(' ');
+                i += 1;
+            }
+            b'%' if i + 2 < b.len() => {
+                let h = |c: u8| (c as char).to_digit(16);
+                if let (Some(hi), Some(lo)) = (h(b[i + 1]), h(b[i + 2])) {
+                    out.push((hi * 16 + lo) as u8 as char);
+                    i += 3;
+                } else {
+                    out.push('%');
+                    i += 1;
+                }
+            }
+            c => {
+                out.push(c as char);
+                i += 1;
+            }
+        }
+    }
+    out
+}
+
+fn query_param<'a>(path: &'a str, key: &str) -> Option<String> {
+    let q = path.split_once('?')?.1;
+    for pair in q.split('&') {
+        if let Some((k, v)) = pair.split_once('=') {
+            if k == key {
+                return Some(urldecode(v));
+            }
+        }
+    }
+    None
+}
+
+/// Map a DNS type token ("A", "aaaa", "28", "txt") to its numeric qtype.
+fn parse_qtype(s: &str) -> Option<u16> {
+    if let Ok(n) = s.parse::<u16>() {
+        return Some(n);
+    }
+    Some(match s.to_ascii_uppercase().as_str() {
+        "A" => 1,
+        "NS" => 2,
+        "CNAME" => 5,
+        "SOA" => 6,
+        "PTR" => 12,
+        "MX" => 15,
+        "TXT" => 16,
+        "AAAA" => 28,
+        "SRV" => 33,
+        "DS" => 43,
+        "DNSKEY" => 48,
+        "SVCB" => 64,
+        "HTTPS" => 65,
+        "ANY" => 255,
+        "CAA" => 257,
+        _ => return None,
+    })
+}
+
+/// Build an HTTP/1.1 JSON response. Includes a permissive CORS header so the
+/// bundled test page works when opened directly from disk (file:// origin).
+fn http_json(status: &str, body: &str) -> String {
+    format!(
+        "HTTP/1.1 {}\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+        status,
+        body.len(),
+        body
+    )
+}
+
+fn rcode_name(r: u8) -> &'static str {
+    match r {
+        0 => "NOERROR",
+        1 => "FORMERR",
+        2 => "SERVFAIL",
+        3 => "NXDOMAIN",
+        4 => "NOTIMP",
+        5 => "REFUSED",
+        _ => "OTHER",
+    }
+}
 
 fn stats_json(ctx: &Arc<Ctx>) -> serde_json::Value {
     let s = &ctx.stats;
@@ -109,12 +199,42 @@ pub async fn run(ctx: Arc<Ctx>, listen: String) -> Result<()> {
                         .unwrap_or(500)
                         .min(5000);
                     let body = json!({ "entries": ctx.qlog.snapshot(n) }).to_string();
-                    let resp = format!(
-                        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-                        body.len(),
-                        body
-                    );
-                    let _ = stream.write_all(resp.as_bytes()).await;
+                    let _ = stream.write_all(http_json("200 OK", &body).as_bytes()).await;
+                    return;
+                }
+
+                // GET /resolve?name=<domain>&type=<A|AAAA|...>  -> dig-like JSON
+                if path.starts_with("/resolve?") || path == "/resolve" {
+                    let name = query_param(path, "name").unwrap_or_default();
+                    let qt = query_param(path, "type").unwrap_or_else(|| "A".into());
+                    let name = name.trim().trim_end_matches('.').to_string();
+                    let body = if name.is_empty() {
+                        json!({"error": "missing name"}).to_string()
+                    } else if let Some(qtype) = parse_qtype(&qt) {
+                        match resolve_named(&ctx, &name, qtype).await {
+                            Ok(r) => json!({
+                                "name": name,
+                                "type": qt.to_ascii_uppercase(),
+                                "route": r.route,
+                                "upstream": r.upstream,
+                                "rcode": rcode_name(r.rcode),
+                                "answers": r.ips.iter().map(|ip| ip.to_string()).collect::<Vec<_>>(),
+                                "ttl": r.ttl,
+                                "elapsed_ms": (r.elapsed.as_micros() as f64 / 1000.0 * 100.0).round() / 100.0,
+                            })
+                            .to_string(),
+                            Err(e) => json!({
+                                "name": name,
+                                "type": qt.to_ascii_uppercase(),
+                                "route": "failed",
+                                "error": e.to_string(),
+                            })
+                            .to_string(),
+                        }
+                    } else {
+                        json!({"error": format!("unknown type '{}'", qt)}).to_string()
+                    };
+                    let _ = stream.write_all(http_json("200 OK", &body).as_bytes()).await;
                     return;
                 }
                 let (status, body) = match path {
@@ -136,13 +256,7 @@ pub async fn run(ctx: Arc<Ctx>, listen: String) -> Result<()> {
                     }
                     _ => ("404 Not Found", json!({"error": "not found"}).to_string()),
                 };
-                let resp = format!(
-                    "HTTP/1.1 {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-                    status,
-                    body.len(),
-                    body
-                );
-                let _ = stream.write_all(resp.as_bytes()).await;
+                let _ = stream.write_all(http_json(status, &body).as_bytes()).await;
             });
         }
     });

@@ -42,6 +42,8 @@ function index()
 	entry({"admin", "services", "photondns", "api", "cleanlog"}, call("action_cleanlog")).leaf = true
 	entry({"admin", "services", "photondns", "api", "listupdate"}, call("action_listupdate")).leaf = true
 	entry({"admin", "services", "photondns", "api", "liststatus"}, call("action_liststatus")).leaf = true
+	entry({"admin", "services", "photondns", "api", "servicestate"}, call("action_servicestate")).leaf = true
+	entry({"admin", "services", "photondns", "api", "servicetoggle"}, call("action_servicetoggle")).leaf = true
 end
 
 local function api_port()
@@ -186,4 +188,28 @@ function action_liststatus()
 		updating = nixio.fs.access(l.lock) ~= nil,
 		log      = logtxt,
 	})
+end
+
+-- persistent on/off switch: read uci enabled + whether the API answers
+function action_servicestate()
+	local c = luci.model.uci.cursor()
+	c:load("photondns")
+	local enabled = (c:get("photondns", "main", "enabled") == "1")
+	local running = api_get("/health") ~= nil
+	write_json({ enabled = enabled, running = running })
+end
+
+-- set uci enabled, commit, then start/stop so it takes effect immediately
+function action_servicetoggle()
+	local enable = luci.http.formvalue("enable") == "1"
+	local c = luci.model.uci.cursor()
+	c:load("photondns")
+	c:set("photondns", "main", "enabled", enable and "1" or "0")
+	c:commit("photondns")
+	if enable then
+		os.execute("/etc/init.d/photondns enable; /etc/init.d/photondns restart >/dev/null 2>&1")
+	else
+		os.execute("/etc/init.d/photondns stop >/dev/null 2>&1; /etc/init.d/photondns disable")
+	end
+	write_json({ success = true, enabled = enable })
 end

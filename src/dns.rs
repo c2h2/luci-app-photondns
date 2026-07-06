@@ -8,6 +8,7 @@ pub const TYPE_SOA: u16 = 6;
 pub const TYPE_AAAA: u16 = 28;
 pub const TYPE_OPT: u16 = 41;
 pub const TYPE_HTTPS: u16 = 65;
+pub const CLASS_IN: u16 = 1;
 pub const RCODE_NOERROR: u8 = 0;
 pub const RCODE_FORMERR: u8 = 1;
 pub const RCODE_SERVFAIL: u8 = 2;

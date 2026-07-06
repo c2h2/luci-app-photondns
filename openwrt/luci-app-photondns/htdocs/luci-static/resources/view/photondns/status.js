@@ -16,6 +16,19 @@ const callFlushCache = rpc.declare({
 	expect: { '': {} }
 });
 
+const callServiceState = rpc.declare({
+	object: 'luci.photondns',
+	method: 'service_state',
+	expect: { '': {} }
+});
+
+const callServiceToggle = rpc.declare({
+	object: 'luci.photondns',
+	method: 'service_toggle',
+	params: [ 'enable' ],
+	expect: { '': {} }
+});
+
 function fmtUptime(s) {
 	const d = Math.floor(s / 86400);
 	const h = Math.floor((s % 86400) / 3600);
@@ -122,7 +135,10 @@ function render_stats(container, res) {
 
 return view.extend({
 	load() {
-		return L.resolveDefault(callStats(), {});
+		return Promise.all([
+			L.resolveDefault(callStats(), {}),
+			L.resolveDefault(callServiceState(), {})
+		]);
 	},
 
 	handleFlushCache() {
@@ -134,9 +150,26 @@ return view.extend({
 		});
 	},
 
+	handleToggleService(enable) {
+		return callServiceToggle(enable).then(res => {
+			if (res && res.success) {
+				ui.addNotification(null, E('p',
+					enable ? _('photondns started.') : _('photondns stopped.')), 'info');
+				location.reload();
+			} else {
+				ui.addNotification(null, E('p',
+					_('Could not change service state: ') + ((res && res.error) || '?')), 'error');
+			}
+		});
+	},
+
 	render(data) {
+		const stats = (data && data[0]) || {};
+		const state = (data && data[1]) || {};
+		const enabled = !!state.enabled;
+
 		const container = E('div', {}, _('Collecting data...'));
-		render_stats(container, data);
+		render_stats(container, stats);
 
 		poll.add(() => {
 			return L.resolveDefault(callStats(), {}).then(res => {
@@ -144,11 +177,26 @@ return view.extend({
 			});
 		}, 3);
 
+		const toggleBtn = enabled
+			? E('button', {
+				class: 'btn cbi-button-remove',
+				click: ui.createHandlerFn(this, 'handleToggleService', false)
+			}, _('Turn Off'))
+			: E('button', {
+				class: 'btn cbi-button-add',
+				click: ui.createHandlerFn(this, 'handleToggleService', true)
+			}, _('Turn On'));
+
 		return E('div', { class: 'cbi-map' }, [
 			E('h2', {}, _('photondns Status')),
 			E('div', { class: 'cbi-map-descr' },
 				_('High-performance Rust DNS forwarder with caching and adaptive multi-path failover.')),
-			E('div', { style: 'margin:8px 0' }, [
+			E('div', { style: 'margin:8px 0; display:flex; gap:8px; align-items:center' }, [
+				toggleBtn,
+				E('span', {
+					style: 'padding:1px 8px; border-radius:8px; color:#fff; background:' +
+						(enabled ? '#2ca02c' : '#6c757d')
+				}, enabled ? _('Service enabled') : _('Service disabled')),
 				E('button', {
 					class: 'btn cbi-button-apply',
 					click: ui.createHandlerFn(this, 'handleFlushCache')

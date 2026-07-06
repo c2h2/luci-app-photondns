@@ -21,18 +21,23 @@
 					"chinalist_status",
 					"update_adlist",
 					"adlist_status",
-					"query_log"
+					"query_log",
+					"service_state"
 				]
 			},
 			"uci": [ "photondns" ]
 		},
 		"write": {
 			"file": {
+				"/etc/init.d/photondns": [ "exec" ],
 				"/etc/photondns/*": [ "write" ],
 				"/var/log/*": [ "write" ]
 			},
 			"ubus": {
-				"file": [ "write" ]
+				"file": [ "write" ],
+				"luci.photondns": [
+					"service_toggle"
+				]
 			},
 			"uci": [ "photondns" ]
 		}

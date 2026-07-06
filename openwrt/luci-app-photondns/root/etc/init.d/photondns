@@ -104,7 +104,7 @@ generate_config() {
 	dump_interval = $dump_interval
 
 	[api]
-	listen = "127.0.0.1:$api_port"
+	listen = "$listen_address:$api_port"
 
 	[log]
 	level = "$log_level"

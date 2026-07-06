@@ -200,6 +200,46 @@ const methods = {
 				return { error: String(e) };
 			}
 		}
+	},
+
+	// Read the persistent on/off switch (uci enabled) plus whether the
+	// daemon is actually answering on its API right now.
+	service_state: {
+		call: function() {
+			try {
+				let c = cursor();
+				c.load('photondns');
+				let enabled = (c.get('photondns', 'main', 'enabled') == '1');
+				let res = api_get('/health');
+				let running = (res.code === 0 && length(res.stdout) > 0);
+				return { enabled: enabled, running: running };
+			} catch (e) {
+				return { error: String(e) };
+			}
+		}
+	},
+
+	// Persistent on/off: set uci enabled, commit, then start or stop the
+	// service so the change takes effect immediately and survives reboot.
+	service_toggle: {
+		args: { enable: false },
+		call: function(req) {
+			try {
+				let on = req.args ? req.args.enable : false;
+				let c = cursor();
+				c.load('photondns');
+				c.set('photondns', 'main', 'enabled', on ? '1' : '0');
+				c.commit('photondns');
+				if (on) {
+					exec_sys('/etc/init.d/photondns enable; /etc/init.d/photondns restart');
+				} else {
+					exec_sys('/etc/init.d/photondns stop; /etc/init.d/photondns disable');
+				}
+				return { success: true, enabled: on ? true : false };
+			} catch (e) {
+				return { success: false, error: String(e) };
+			}
+		}
 	}
 };
 

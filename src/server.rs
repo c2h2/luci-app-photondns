@@ -276,6 +276,80 @@ async fn resolve_redirect(
     dns::build_ip_reply(query, meta, &ips, ttl)
 }
 
+/// Structured result of a diagnostic resolve (the `/resolve` API + test page).
+pub struct ResolveResult {
+    pub route: String,
+    pub upstream: String,
+    pub rcode: u8,
+    pub ips: Vec<std::net::IpAddr>,
+    pub ttl: u32,
+    pub elapsed: Duration,
+}
+
+/// Resolve a name through the real pipeline (router -> cache -> failover) and
+/// return structured diagnostics instead of wire bytes. Used by the HTTP
+/// `/resolve` endpoint so a browser can get dig-like output: the answer, which
+/// route served it, the winning upstream, and how long it took.
+///
+/// Unlike `handle_query` this never touches the query log or client-facing
+/// stats counters beyond what `resolve_upstream` already does; it is a
+/// read/diagnose path, not the hot serving path.
+pub async fn resolve_named(ctx: &Arc<Ctx>, name: &str, qtype: u16) -> Result<ResolveResult> {
+    let start = Instant::now();
+    let qclass = dns::CLASS_IN;
+    let query = dns::build_query(name, qtype, qclass).context("invalid query name")?;
+    let meta = dns::parse_query(&query).context("could not parse built query")?;
+
+    let mk = |route: &str, upstream: &str, resp: &[u8]| ResolveResult {
+        route: route.to_string(),
+        upstream: upstream.to_string(),
+        rcode: dns::rcode(resp),
+        ips: dns::extract_ips(resp, meta.question_end),
+        ttl: dns::min_answer_ttl(resp, meta.question_end, 0),
+        elapsed: start.elapsed(),
+    };
+
+    // local routing decisions
+    match ctx.router.decide(&meta.qname, meta.qtype) {
+        Decision::Hosts(ips) => {
+            let r = dns::build_ip_reply(&query, &meta, ips, ctx.router.hosts_ttl);
+            return Ok(mk("hosts", "", &r));
+        }
+        Decision::Block => {
+            let r = dns::build_reply(&query, meta.question_end, dns::RCODE_NXDOMAIN);
+            return Ok(mk("blocked", "", &r));
+        }
+        Decision::Redirect(target) => {
+            let target = target.to_string();
+            let r = resolve_redirect(ctx, &query, &meta, &target).await;
+            return Ok(mk("redirect", &target, &r));
+        }
+        Decision::Forward(_) => {}
+    }
+
+    let key = cache::make_key(&meta.qname, meta.qtype, meta.qclass);
+
+    if let Some(cache) = &ctx.cache {
+        let now = Instant::now();
+        if let Some((entry, freshness)) = cache.get(&key, now) {
+            match freshness {
+                Freshness::Fresh { .. } => {
+                    let r = entry.make_response(&query, &meta, now);
+                    return Ok(mk("cache", "", &r));
+                }
+                Freshness::Stale if ctx.cfg.cache.serve_stale => {
+                    let r = entry.make_response(&query, &meta, now);
+                    return Ok(mk("stale", "", &r));
+                }
+                Freshness::Stale => {}
+            }
+        }
+    }
+
+    let (resp, group, winner) = resolve_upstream(ctx, &query, &meta, &key).await?;
+    Ok(mk(&group, &winner, &resp))
+}
+
 /// UDP size guard: replace oversized UDP answers with a TC probe.
 fn finish(resp: &[u8], query: &[u8], meta: &dns::QueryMeta, via_tcp: bool) -> Vec<u8> {
     if !via_tcp && resp.len() > meta.udp_size as usize {
