@@ -5,6 +5,10 @@ name: build-packages
 # packages for the daemon plus the two architecture-independent LuCI apps,
 # verifies an .ipk actually installs in a real OpenWrt rootfs, and attaches
 # everything to a GitHub Release on tag push.
+#
+# Also ships each daemon build as a standalone static binary
+# (photondns-<ver>-<arch>-linux-musl) — no OpenWrt needed, runs on any
+# Linux distro (see run_standalone.sh / plain systemd deployments).
 
 on:
   push:
@@ -79,6 +83,12 @@ jobs:
             ${{ matrix.triple }} \
             target/${{ matrix.triple }}/release/photondns \
             dist
+
+      - name: Standalone static binary
+        run: |
+          ver="$(sed -n 's/^version *= *"\(.*\)"/\1/p' Cargo.toml | head -1)"
+          install -m 0755 target/${{ matrix.triple }}/release/photondns \
+            "dist/photondns-${ver}-${{ matrix.arch }}-linux-musl"
 
       - name: List artifacts
         run: ls -la dist/

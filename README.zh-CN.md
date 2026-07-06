@@ -69,6 +69,10 @@ cargo build --release
 - **默认配置** — 广告拦截默认关闭。
 - **版本号** — 构建时自动嵌入 `0.x.z-rN`（N = git 提交数）。
 - **`/resolve` API + 测试页** — 走真实解析管线的 dig 风格 JSON 诊断。
+- **Release 附带独立二进制** — CI 现在额外发布静态编译的独立二进制
+  （`photondns-<ver>-<arch>-linux-musl`，aarch64/x86_64/armv7/riscv64），
+  无需 OpenWrt，任何 Linux 发行版可直接运行，配合 systemd 或
+  `run_standalone.sh` 使用。
 - **新工具** — `run_standalone.sh`（本机一键构建运行）、
   `tools/tricky-tests.sh`（26 项边界用例实测）、
   `tools/compare-dns.py`（随机域名与独立 DoH 参照源交叉比对）。

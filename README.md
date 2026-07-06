@@ -81,6 +81,10 @@ public resolver.
   reported by `-V`, `/version` and `/stats`.
 - **`/resolve` API + test page** — dig-like JSON diagnostics through the real
   pipeline: route taken, winning upstream, rcode, answers, latency.
+- **Standalone binaries in releases** — CI now also attaches each daemon
+  build as a plain static binary (`photondns-<ver>-<arch>-linux-musl`,
+  aarch64/x86_64/armv7/riscv64) — no OpenWrt needed, runs on any Linux
+  distro; pairs with a plain systemd unit or `run_standalone.sh`.
 - **New tooling** — `run_standalone.sh` (build & run locally with a generated
   config, no OpenWrt needed), `tools/tricky-tests.sh` (26 edge-case checks
   against a live server: 0x20 case echo, TC→TCP fallback, negative cache,
