@@ -32,6 +32,8 @@ function index()
 		template("photondns/chinalist"), _("List Updates"), 17)
 	entry({"admin", "services", "photondns", "logs"},
 		template("photondns/logs"), _("Logs"), 20)
+	entry({"admin", "services", "photondns", "help"},
+		template("photondns/help"), _("Help"), 25)
 
 	-- JSON data endpoints (called by the templates via XHR)
 	entry({"admin", "services", "photondns", "api", "stats"},    call("action_stats")).leaf = true
