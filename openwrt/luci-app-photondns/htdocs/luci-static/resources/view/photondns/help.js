@@ -201,6 +201,29 @@ var HELP = [
 		}
 	},
 	{
+		id: 'ipv6',
+		en: {
+			title: 'IPv6 (AAAA) handling',
+			body: [
+				'Devices ask for a name in two flavors at once: A (IPv4) and AAAA (IPv6). They then pick whichever connects fastest ("Happy Eyeballs"). If your IPv6 path is slow or unreliable, connections can stall while a device tries IPv6 first. The "IPv6 (AAAA) handling" setting lets photondns steer clients onto IPv4.',
+				'Allow (default) - answer AAAA normally; no interference.',
+				'Block if IPv4 exists - return an empty IPv6 answer only for names that also have an IPv4 address, so the client uses IPv4. Names that are IPv6-only still get their real AAAA and keep working. This is the safe choice; it costs one small IPv4 lookup per AAAA (usually already cached, so about 0 ms).',
+				'Block all IPv6 - always return an empty AAAA, forcing every client onto IPv4. Simplest and lowest-overhead, but a rare IPv6-only service would become unreachable.',
+				'Note: "empty answer" means a normal NOERROR with no address (the clean "there is no IPv6 here"), not an error - so clients fall back to IPv4 gracefully rather than seeing a failure.'
+			]
+		},
+		zh: {
+			title: 'IPv6（AAAA）处理',
+			body: [
+				'设备会同时以两种形式查询一个名字：A（IPv4）和 AAAA（IPv6），然后选用最快连上的那个（“Happy Eyeballs”）。如果你的 IPv6 链路较慢或不稳定，设备先尝试 IPv6 时连接可能会卡住。“IPv6（AAAA）处理”设置可让 photondns 引导客户端改走 IPv4。',
+				'Allow（允许，默认）—— 正常应答 AAAA，不做干预。',
+				'Block if IPv4 exists（存在 IPv4 时拦截）—— 仅对同时拥有 IPv4 地址的名字返回空的 IPv6 答案，使客户端改用 IPv4。纯 IPv6 的名字仍会拿到真实的 AAAA 并正常工作。这是稳妥之选；每次 AAAA 会附带一次很小的 IPv4 查询（通常已在缓存中，约 0 毫秒）。',
+				'Block all IPv6（全部拦截）—— 始终返回空的 AAAA，强制所有客户端走 IPv4。最简单、开销最低，但极少数纯 IPv6 服务会变得不可达。',
+				'注意：“空答案”指的是正常的 NOERROR 但不含地址（即干净地表示“这里没有 IPv6”），并非错误——因此客户端会平滑回退到 IPv4，而不会遇到失败。'
+			]
+		}
+	},
+	{
 		id: 'prefetch',
 		en: {
 			title: 'Prefetch',
@@ -328,6 +351,7 @@ var NAV = {
 	strategy:          { en: 'Strategy',     zh: '策略' },
 	hedge:             { en: 'Hedging',      zh: '对冲' },
 	dotdoh:            { en: 'DoT/DoH',      zh: 'DoT/DoH' },
+	ipv6:              { en: 'IPv6/AAAA',    zh: 'IPv6/AAAA' },
 	prefetch:          { en: 'Prefetch',     zh: '预取' },
 	failover:          { en: 'Failover',     zh: '故障切换' },
 	servestale_persist:{ en: 'Persist',      zh: '持久化' },

@@ -220,6 +220,13 @@ return view.extend({
 			_('Answer HTTPS/SVCB queries with NXDOMAIN, forcing clients onto plain A/AAAA records'));
 		o.default = false;
 
+		o = s.taboption('basic', form.ListValue, 'aaaa_mode', _('IPv6 (AAAA) handling'),
+			_('Whether to answer IPv6 (AAAA) lookups. "Block if IPv4 exists" suppresses IPv6 only for names that also have an IPv4 address, so IPv6-only sites still work; "Block all" forces every client onto IPv4.'));
+		o.value('allow', _('Allow (default)'));
+		o.value('block_if_ipv4', _('Block if IPv4 exists'));
+		o.value('block_all', _('Block all IPv6'));
+		o.default = 'allow';
+
 		o = s.taboption('basic', form.Value, 'query_log_size', _('Query log size'),
 			_('Number of recent queries kept in memory for the Query Log page; 0 disables it'));
 		o.datatype = 'and(uinteger,max(65536))';

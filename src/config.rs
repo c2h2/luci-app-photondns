@@ -156,6 +156,11 @@ pub struct RoutingCfg {
     /// refuse HTTPS/SVCB (type 65) queries with NXDOMAIN
     #[serde(default)]
     pub reject_type65: bool,
+    /// IPv6 (AAAA) handling: "allow" (default), "block_if_ipv4" (return an
+    /// empty AAAA only when the name also has an A record), or "block_all"
+    /// (always return an empty AAAA, forcing clients to IPv4).
+    #[serde(default = "default_aaaa_mode")]
+    pub aaaa_mode: String,
     /// NXDOMAIN for special-use TLDs (.local, .lan, .internal, ...) that
     /// must never reach public resolvers (mDNS noise protection)
     #[serde(default = "default_true")]
@@ -256,6 +261,9 @@ fn default_cooldown() -> u64 {
 }
 fn default_hosts_ttl() -> u32 {
     300
+}
+fn default_aaaa_mode() -> String {
+    "allow".into()
 }
 fn default_strategy() -> String {
     "race".into()

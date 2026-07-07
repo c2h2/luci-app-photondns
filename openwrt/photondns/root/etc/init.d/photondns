@@ -48,6 +48,7 @@ get_config() {
 	config_get insecure_skip_verify $1 insecure_skip_verify 0
 	config_get idle_timeout $1 idle_timeout 30
 	config_get reject_type65 $1 reject_type65 0
+	config_get aaaa_mode $1 aaaa_mode "allow"
 	config_get china_list $1 china_list 0
 	config_get adblock $1 adblock 0
 	config_get query_log_size $1 query_log_size 5000
@@ -143,6 +144,7 @@ generate_config() {
 	ad_list_file = "$ad_list_file"
 	redirect_file = "$RULE_DIR/redirect.txt"
 	reject_type65 = $(bool_str $reject_type65)
+	aaaa_mode = "$aaaa_mode"
 
 	[[group]]
 	name = "main"

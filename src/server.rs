@@ -118,6 +118,32 @@ async fn resolve_upstream(
     Ok((resp, group.name.clone(), winner))
 }
 
+/// For AAAA-mode `block_if_ipv4`: does `qname` have any A (IPv4) record?
+/// Checks the cache first (the client's parallel A query is usually already
+/// there), else does one upstream A lookup and caches it so that parallel A
+/// query is then free. On any lookup error we return `false` (fail open:
+/// do not suppress AAAA when we cannot confirm IPv4 exists).
+async fn name_has_ipv4(ctx: &Arc<Ctx>, meta: &dns::QueryMeta) -> bool {
+    let key = cache::make_key(&meta.qname, dns::TYPE_A, meta.qclass);
+    if let Some(cache) = &ctx.cache {
+        if let Some((entry, _freshness)) = cache.get(&key, Instant::now()) {
+            let qend = dns::HEADER_LEN + entry.question_len as usize;
+            return !dns::extract_ips(&entry.data, qend).is_empty();
+        }
+    }
+    let Some(aq) = dns::build_query(&meta.qname, dns::TYPE_A, meta.qclass) else {
+        return false;
+    };
+    let ameta = match dns::parse_query(&aq) {
+        Some(m) => m,
+        None => return false,
+    };
+    match resolve_upstream(ctx, &aq, &ameta, &key).await {
+        Ok((resp, _, _)) => !dns::extract_ips(&resp, ameta.question_end).is_empty(),
+        Err(_) => false,
+    }
+}
+
 /// Trigger a background refresh unless one is already running for the entry.
 fn maybe_refresh(ctx: &Arc<Ctx>, entry: &CacheEntry, meta: &dns::QueryMeta, key: &cache::CacheKey) {
     if entry
@@ -191,6 +217,23 @@ pub async fn handle_query(
             return Some(r);
         }
         Decision::Forward(_) => {}
+    }
+
+    // IPv6 (AAAA) policy: optionally answer AAAA with an empty NOERROR so
+    // clients fall back to IPv4. `block_all` always suppresses; `block_if_ipv4`
+    // suppresses only when the name also has an A record (IPv6-only names still
+    // resolve). An empty NOERROR (not NXDOMAIN) is the correct "no IPv6 here".
+    if meta.qtype == dns::TYPE_AAAA {
+        let suppress = match ctx.cfg.routing.aaaa_mode.as_str() {
+            "block_all" => true,
+            "block_if_ipv4" => name_has_ipv4(ctx, &meta).await,
+            _ => false,
+        };
+        if suppress {
+            stats.blocked.fetch_add(1, Ordering::Relaxed);
+            qlog("aaaa-blocked", "");
+            return Some(dns::build_reply(query, meta.question_end, dns::RCODE_NOERROR));
+        }
     }
 
     let key = cache::make_key(&meta.qname, meta.qtype, meta.qclass);

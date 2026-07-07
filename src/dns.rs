@@ -531,4 +531,22 @@ mod tests {
         assert!(is_response(&r));
         assert_eq!(parse_query(&r).unwrap().qname, "blocked.example");
     }
+
+    #[test]
+    fn aaaa_suppressed_is_empty_noerror() {
+        // The AAAA-blocking modes answer with build_reply(.., RCODE_NOERROR):
+        // a valid response, correct question echoed, NO address records, and
+        // NOERROR (NODATA) rather than an error - so clients fall back to IPv4.
+        let q = build_query("dual.example", TYPE_AAAA, 1).unwrap();
+        let meta = parse_query(&q).unwrap();
+        let r = build_reply(&q, meta.question_end, RCODE_NOERROR);
+        assert!(is_response(&r));
+        assert_eq!(rcode(&r), RCODE_NOERROR);
+        let rm = parse_query(&r).unwrap();
+        assert_eq!(rm.qname, "dual.example");
+        assert_eq!(rm.qtype, TYPE_AAAA);
+        assert!(extract_ips(&r, rm.question_end).is_empty());
+        // ANCOUNT must be zero
+        assert_eq!(u16_at(&r, 6).unwrap(), 0);
+    }
 }
