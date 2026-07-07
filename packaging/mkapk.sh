@@ -30,11 +30,11 @@ args=(mkpkg
 	--info "url:https://github.com/c2h2/luci-app-photondns"
 )
 
-# dependencies (space-separated -> repeated --info depends:)
+# dependencies: one --info with a space-separated list. Repeated
+# "--info depends:x" flags overwrite each other (last one wins), which
+# silently drops all but one dependency.
 if [ -n "$DEPENDS" ]; then
-	for d in $DEPENDS; do
-		args+=(--info "depends:$d")
-	done
+	args+=(--info "depends:$(echo "$DEPENDS" | xargs)")
 fi
 
 # post-install trigger script
@@ -42,8 +42,24 @@ if [ -n "$POSTINST" ] && [ -f "$POSTINST" ]; then
 	args+=(--script "post-install:$POSTINST")
 fi
 
+# apk mkpkg records the on-disk owner of staged files in the package acls
+# (mkipk normalizes to root:root via tar flags). Pack from a root-owned copy
+# when we can become root; the copy's top dir must stay world-traversable or
+# mkpkg (running unprivileged) cannot read it back.
+PACK="$STAGE"
+SUDO=""
+[ "$(id -u)" != "0" ] && SUDO="sudo"
+if [ -z "$SUDO" ] || sudo -n true 2>/dev/null; then
+	PACKTMP="$(mktemp -d)"
+	trap '$SUDO rm -rf "$PACKTMP"' EXIT
+	chmod 755 "$PACKTMP"
+	cp -R "$STAGE/." "$PACKTMP/"
+	$SUDO chown -R 0:0 "$PACKTMP"
+	PACK="$PACKTMP"
+fi
+
 # the staged tree becomes the package files
-args+=(--files "$STAGE")
+args+=(--files "$PACK")
 
 apk "${args[@]}" --output "$OUT"
 echo "built $OUT"
