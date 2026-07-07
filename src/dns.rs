@@ -285,6 +285,17 @@ pub fn age_ttls(buf: &mut [u8], offsets: &[u16], elapsed: u32) {
     }
 }
 
+/// Stamp every RR TTL at `offsets` to `value` in a cached response copy.
+pub fn set_ttls(buf: &mut [u8], offsets: &[u16], value: u32) {
+    for &off in offsets {
+        let off = off as usize;
+        if off + 4 > buf.len() {
+            continue;
+        }
+        buf[off..off + 4].copy_from_slice(&value.to_be_bytes());
+    }
+}
+
 /// Clamp every RR TTL into [min_ttl, max_ttl] (0 = no bound) in place.
 pub fn clamp_ttls(buf: &mut [u8], question_end: usize, min_ttl: u32, max_ttl: u32) {
     if min_ttl == 0 && max_ttl == 0 {

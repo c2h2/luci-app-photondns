@@ -69,6 +69,9 @@ pub struct CacheCfg {
     /// how long past expiry an entry may still be served (seconds)
     #[serde(default = "default_stale_ttl")]
     pub stale_ttl: u32,
+    /// TTL stamped on stale answers so clients cache them briefly (RFC 8767)
+    #[serde(default = "default_stale_client_ttl")]
+    pub stale_client_ttl: u32,
     /// refresh popular entries shortly before they expire
     #[serde(default = "default_true")]
     pub prefetch: bool,
@@ -213,6 +216,9 @@ fn default_negative_ttl() -> u32 {
 }
 fn default_stale_ttl() -> u32 {
     86400
+}
+fn default_stale_client_ttl() -> u32 {
+    30
 }
 fn default_prefetch_margin() -> u32 {
     10

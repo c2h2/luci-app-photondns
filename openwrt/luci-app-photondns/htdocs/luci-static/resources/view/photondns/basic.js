@@ -408,6 +408,12 @@ return view.extend({
 		o.default = '86400';
 		o.depends('serve_stale', '1');
 
+		o = s.taboption('cache', form.Value, 'stale_client_ttl', _('Stale answer TTL (s)'),
+			_('TTL stamped on stale answers so clients can cache them briefly; RFC 8767 recommends 30'));
+		o.datatype = 'and(uinteger,min(1),max(600))';
+		o.default = '30';
+		o.depends('serve_stale', '1');
+
 		o = s.taboption('cache', form.Flag, 'prefetch', _('Prefetch popular entries'),
 			_('Refresh frequently used entries shortly before they expire, so they never go stale'));
 		o.default = true;

@@ -361,6 +361,12 @@ msgstr "过期条目保留时间（秒）"
 msgid "How long past expiry an entry may still be served"
 msgstr "条目过期后仍可被应答的时长"
 
+msgid "Stale answer TTL (s)"
+msgstr "过期应答 TTL（秒）"
+
+msgid "TTL stamped on stale answers so clients can cache them briefly; RFC 8767 recommends 30"
+msgstr "为过期应答标记的 TTL，使客户端可短暂缓存；RFC 8767 建议 30"
+
 msgid "Prefetch popular entries"
 msgstr "预取热门条目"
 

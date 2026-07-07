@@ -210,13 +210,13 @@ pub async fn handle_query(
                         maybe_refresh(ctx, &entry, &meta, &key);
                     }
                     qlog("cache", "");
-                    return Some(finish(&entry.make_response(query, &meta, now), query, &meta, transport));
+                    return Some(finish(&entry.make_response(query, &meta, now, ctx.cfg.cache.stale_client_ttl), query, &meta, transport));
                 }
                 Freshness::Stale if ctx.cfg.cache.serve_stale => {
                     stats.stale_served.fetch_add(1, Ordering::Relaxed);
                     maybe_refresh(ctx, &entry, &meta, &key);
                     qlog("stale", "");
-                    return Some(finish(&entry.make_response(query, &meta, now), query, &meta, transport));
+                    return Some(finish(&entry.make_response(query, &meta, now, ctx.cfg.cache.stale_client_ttl), query, &meta, transport));
                 }
                 Freshness::Stale => {
                     // serve-stale disabled: try upstream, fall back to stale on failure
@@ -229,7 +229,7 @@ pub async fn handle_query(
                         Err(_) => {
                             stats.stale_served.fetch_add(1, Ordering::Relaxed);
                             qlog("stale", "");
-                            Some(finish(&entry.make_response(query, &meta, now), query, &meta, transport))
+                            Some(finish(&entry.make_response(query, &meta, now, ctx.cfg.cache.stale_client_ttl), query, &meta, transport))
                         }
                     };
                 }
@@ -348,11 +348,11 @@ pub async fn resolve_named(ctx: &Arc<Ctx>, name: &str, qtype: u16) -> Result<Res
         if let Some((entry, freshness)) = cache.get(&key, now) {
             match freshness {
                 Freshness::Fresh { .. } => {
-                    let r = entry.make_response(&query, &meta, now);
+                    let r = entry.make_response(&query, &meta, now, ctx.cfg.cache.stale_client_ttl);
                     return Ok(mk("cache", "", &r));
                 }
                 Freshness::Stale if ctx.cfg.cache.serve_stale => {
-                    let r = entry.make_response(&query, &meta, now);
+                    let r = entry.make_response(&query, &meta, now, ctx.cfg.cache.stale_client_ttl);
                     return Ok(mk("stale", "", &r));
                 }
                 Freshness::Stale => {}

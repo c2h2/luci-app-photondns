@@ -61,7 +61,15 @@ impl CacheEntry {
 
     /// Materialize a response for `query`: copy stored bytes, restore the
     /// client's ID and exact question spelling (0x20 case), age TTLs.
-    pub fn make_response(&self, query: &[u8], meta: &dns::QueryMeta, now: Instant) -> Vec<u8> {
+    /// Stale entries are stamped with `stale_client_ttl` instead of the aged
+    /// floor of 1 so clients can cache them briefly (RFC 8767).
+    pub fn make_response(
+        &self,
+        query: &[u8],
+        meta: &dns::QueryMeta,
+        now: Instant,
+        stale_client_ttl: u32,
+    ) -> Vec<u8> {
         let mut out = self.data.clone();
         dns::set_id(&mut out, meta.id);
         let qlen = meta.question_end - dns::HEADER_LEN;
@@ -69,7 +77,12 @@ impl CacheEntry {
             out[dns::HEADER_LEN..meta.question_end]
                 .copy_from_slice(&query[dns::HEADER_LEN..meta.question_end]);
         }
-        dns::age_ttls(&mut out, &self.ttl_offsets, self.elapsed_secs(now));
+        let elapsed = self.elapsed_secs(now);
+        if elapsed >= self.ttl {
+            dns::set_ttls(&mut out, &self.ttl_offsets, stale_client_ttl.max(1));
+        } else {
+            dns::age_ttls(&mut out, &self.ttl_offsets, elapsed);
+        }
         out
     }
 }
@@ -328,13 +341,37 @@ mod tests {
         dns::set_id(&mut q2, 0xBEEF);
         let meta2 = dns::parse_query(&q2).unwrap();
         let (e, _) = cache.get(&key, Instant::now()).unwrap();
-        let resp = e.make_response(&q2, &meta2, Instant::now());
+        let resp = e.make_response(&q2, &meta2, Instant::now(), 30);
         assert_eq!(dns::get_id(&resp), 0xBEEF);
         // echoed question preserves client's exact bytes
         assert_eq!(
             &resp[dns::HEADER_LEN..meta2.question_end],
             &q2[dns::HEADER_LEN..meta2.question_end]
         );
+    }
+
+    #[test]
+    fn stale_response_stamped_with_client_ttl() {
+        let cache = DnsCache::new(10);
+        let (key, mut entry) = entry_for("stale.example.com", 60, 3600);
+        entry.stored_at = Instant::now() - Duration::from_secs(120);
+        cache.insert(key.clone(), entry);
+        let q = dns::build_query("stale.example.com", dns::TYPE_A, 1).unwrap();
+        let meta = dns::parse_query(&q).unwrap();
+        let (e, f) = cache.get(&key, Instant::now()).unwrap();
+        assert!(matches!(f, Freshness::Stale));
+        let resp = e.make_response(&q, &meta, Instant::now(), 30);
+        let info = dns::cache_info(&resp, meta.question_end, 30).unwrap();
+        assert_eq!(info.ttl, 30);
+        // fresh entries still age normally
+        let (key2, entry2) = entry_for("fresh.example.com", 300, 3600);
+        cache.insert(key2.clone(), entry2);
+        let q2 = dns::build_query("fresh.example.com", dns::TYPE_A, 1).unwrap();
+        let meta2 = dns::parse_query(&q2).unwrap();
+        let (e2, _) = cache.get(&key2, Instant::now()).unwrap();
+        let resp2 = e2.make_response(&q2, &meta2, Instant::now(), 30);
+        let info2 = dns::cache_info(&resp2, meta2.question_end, 30).unwrap();
+        assert!(info2.ttl > 290);
     }
 
     #[test]
