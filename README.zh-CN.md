@@ -134,7 +134,32 @@ upstreams = ["udp://223.5.5.5", "udp://119.29.29.29"]
 backups = ["tls://8.8.8.8"]
 ```
 
-OpenWrt（通过 SSH 部署二进制 + LuCI 应用）：
+要把 DoH 端点发布给浏览器使用，可以用 Caddy 反向代理：
+
+```
+dns.example.com {
+    reverse_proxy /dns-query 127.0.0.1:8054
+}
+```
+
+或直接原生 TLS：设置 `doh_cert = "/path/fullchain.pem"`、
+`doh_key = "/path/key.pem"`，然后
+`curl --doh-url https://dns.example.com/dns-query https://example.org`。
+
+OpenWrt——预编译包（推荐）。每个
+[release](https://github.com/c2h2/luci-app-photondns/releases) 都附带
+`.ipk`（opkg，≤ 24.10）与 `.apk`（apk，≥ 25.12）包，覆盖 aarch64、x86_64、
+armv7、riscv64 四种架构，外加两个与架构无关的 LuCI 应用：
+
+```sh
+# opkg（OpenWrt ≤ 24.10）——按架构选择
+opkg install photondns_*_aarch64_generic.ipk luci-app-photondns_*_all.ipk
+# apk（OpenWrt ≥ 25.12）
+apk add --allow-untrusted photondns_*_aarch64_generic.apk luci-app-photondns_*_all.apk
+uci set photondns.main.enabled=1; uci commit photondns; /etc/init.d/photondns restart
+```
+
+OpenWrt——从源码构建并通过 SSH 部署：
 
 ```sh
 cargo zigbuild --release --target aarch64-unknown-linux-musl
@@ -145,6 +170,21 @@ dig @192.168.1.1 -p 15533 example.com
 
 然后打开 LuCI → 服务 → photondns。开启 *DNS 转发* 即可接管系统解析
 （dnsmasq 原配置会自动备份并在关闭时恢复）。
+
+## 仓库结构
+
+```
+src/                       Rust 源码（服务端、缓存、上游、故障切换、路由、API）
+src/bin/photonbench.rs     单域名 UDP 压测器
+src/bin/photonrbench.rs    随机化并行基准测试
+openwrt/photondns/         OpenWrt 软件包 Makefile（SDK 构建）
+openwrt/luci-app-photondns/         LuCI 应用（JS + ucode rpcd、UCI 配置、procd 启动脚本）
+openwrt/luci-app-photondns-compat/  面向旧固件的 Lua/CBI 兼容版 LuCI 应用
+deploy.sh                  通过 SSH 直接部署到设备
+run_standalone.sh          本地构建并用生成的配置运行
+tools/tricky-tests.sh      针对线上服务器的边界用例测试集
+tools/compare-dns.py       与独立 DoH 参考源交叉核对应答
+```
 
 ## 许可证
 
