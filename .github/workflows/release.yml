@@ -44,6 +44,10 @@ jobs:
     continue-on-error: false
     steps:
       - uses: actions/checkout@v4
+        with:
+          # full history: build.rs embeds `git rev-list --count HEAD` as the
+          # -r<n> build number; a shallow clone would pin it to a bogus r1.
+          fetch-depth: 0
 
       - name: Install Rust
         run: |
