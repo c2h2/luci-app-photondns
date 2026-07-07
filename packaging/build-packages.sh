@@ -17,7 +17,6 @@ TRIPLE="$1"; BIN="$2"; OUT="$3"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$HERE/.." && pwd)"
 VERSION="$(sed -n 's/^version *= *"\(.*\)"/\1/p' "$REPO/Cargo.toml" | head -1)"
-RELEASE=1
 MAINTAINER="c2h2"
 
 mkdir -p "$OUT"
@@ -52,7 +51,7 @@ find "$stage/etc/init.d" "$stage/etc/uci-defaults" "$stage/usr/bin" -type f \
 ctrl="$WORK/photondns.control"
 cat > "$ctrl" <<EOF
 Package: photondns
-Version: $VERSION-$RELEASE
+Version: $VERSION
 Architecture: $ARCH
 Maintainer: $MAINTAINER
 Section: net
@@ -84,13 +83,13 @@ dpost="$WORK/photondns.postinst"
 } > "$dpost"
 
 bash "$HERE/mkipk.sh" "$stage" "$ctrl" \
-	"$OUT/photondns_${VERSION}-${RELEASE}_${ARCH}.ipk" \
+	"$OUT/photondns_${VERSION}_${ARCH}.ipk" \
 	"$dconf" "$dpost"
 
 if [ "${EMIT_APK:-0}" = "1" ]; then
-	bash "$HERE/mkapk.sh" "$stage" photondns "$VERSION-r$RELEASE" "$ARCH" \
+	bash "$HERE/mkapk.sh" "$stage" photondns "$VERSION" "$ARCH" \
 		"High-performance DNS forwarder written in Rust" \
-		"$OUT/photondns_${VERSION}-${RELEASE}_${ARCH}.apk" \
+		"$OUT/photondns_${VERSION}_${ARCH}.apk" \
 		"" "$dpost"
 fi
 
@@ -109,12 +108,14 @@ if [ "${SKIP_LUCI:-0}" != "1" ]; then
 			mkdir -p "$s/www/luci-static"
 			cp -R "$srcroot/htdocs/luci-static/." "$s/www/luci-static/"
 		fi
-		# compile zh_Hans po -> lmo if present
-		local po="$srcroot/po/zh_Hans/photondns.po"
+		# compile the shared zh_Hans catalog -> lmo. LuCI loads every
+		# /usr/lib/lua/luci/i18n/*.<lang>.lmo, so each package ships it
+		# under its own filename to avoid clashes if both are installed.
+		local po="$REPO/openwrt/luci-app-photondns/po/zh_Hans/photondns.po"
 		if [ -f "$po" ] && command -v python3 >/dev/null 2>&1; then
 			mkdir -p "$s/usr/lib/lua/luci/i18n"
 			python3 "$REPO/tools/po2lmo.py" "$po" \
-				"$s/usr/lib/lua/luci/i18n/photondns.zh-cn.lmo" 2>/dev/null \
+				"$s/usr/lib/lua/luci/i18n/${pkg#luci-app-}.zh-cn.lmo" 2>/dev/null \
 				|| rmdir "$s/usr/lib/lua/luci/i18n" 2>/dev/null || true
 		fi
 		# ensure shipped scripts are executable
@@ -124,7 +125,7 @@ if [ "${SKIP_LUCI:-0}" != "1" ]; then
 		local c="$WORK/$pkg.control"
 		cat > "$c" <<EOF
 Package: $pkg
-Version: $VERSION-$RELEASE
+Version: $VERSION
 Architecture: all
 Maintainer: $MAINTAINER
 Section: luci
@@ -153,14 +154,14 @@ EOF
 		} > "$post"
 
 		bash "$HERE/mkipk.sh" "$s" "$c" \
-			"$OUT/${pkg}_${VERSION}-${RELEASE}_all.ipk" \
+			"$OUT/${pkg}_${VERSION}_all.ipk" \
 			"" "$post"
 
 		if [ "${EMIT_APK:-0}" = "1" ]; then
 			# apk depends: space-separated, no commas
 			local apkdeps; apkdeps="$(echo "$deps" | tr ',' ' ')"
-			bash "$HERE/mkapk.sh" "$s" "$pkg" "$VERSION-r$RELEASE" all \
-				"$desc" "$OUT/${pkg}_${VERSION}-${RELEASE}_all.apk" \
+			bash "$HERE/mkapk.sh" "$s" "$pkg" "$VERSION" all \
+				"$desc" "$OUT/${pkg}_${VERSION}_all.apk" \
 				"$apkdeps" "$post"
 		fi
 	}
