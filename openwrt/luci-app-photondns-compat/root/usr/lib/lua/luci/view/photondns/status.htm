@@ -5,12 +5,17 @@
 	<%:High-performance Rust DNS forwarder with caching and adaptive multi-path failover.%>
 </div>
 
-<div style="margin:8px 0; display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+<div class="pdns-actions" style="margin:12px 0; display:flex; gap:10px; align-items:center; flex-wrap:wrap">
 	<button class="btn" id="photondns_toggle"><%:Loading...%></button>
-	<span id="photondns_toggle_pill" style="padding:1px 8px; border-radius:8px; color:#fff; background:#6c757d"></span>
 	<button class="btn cbi-button-apply" id="photondns_flush"><%:Flush DNS Cache%></button>
-	<span id="photondns_flush_msg" style="margin-left:10px"></span>
+	<span id="photondns_toggle_pill" class="pdns-pill" style="display:inline-flex; align-items:center; gap:6px; height:1.8em; padding:0 12px; border-radius:999px; font-size:.85rem; font-weight:600; color:#fff; background:#6c757d"></span>
+	<span id="photondns_flush_msg" style="margin-left:6px"></span>
 </div>
+
+<style>
+	.pdns-actions .btn { min-height:2em; padding:.25em 1em; font-size:.9rem; line-height:1.4; vertical-align:middle }
+	.pdns-pill::before { content:''; display:inline-block; width:8px; height:8px; border-radius:50%; background:currentColor; opacity:.9 }
+</style>
 
 <div id="photondns_stats"><%:Collecting data...%></div>
 

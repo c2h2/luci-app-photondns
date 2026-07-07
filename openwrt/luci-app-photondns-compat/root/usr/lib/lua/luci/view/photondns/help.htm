@@ -6,23 +6,45 @@
 -%>
 <%+header%>
 
-<h2>photondns &mdash; Help &amp; Glossary</h2>
-
-<div style="margin:0 0 8px 0">
-	<span style="margin-right:10px; color:#888">&#128214;</span>
-	<button class="btn cbi-button-positive" id="pdns_help_en">English</button>
-	<button class="btn" id="pdns_help_zh" style="margin-left:6px">中文</button>
+<div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin:0 0 4px 0">
+	<h2 style="margin:0">&#128214; photondns &mdash; Help &amp; Glossary</h2>
+	<div>
+		<button class="btn cbi-button-positive" id="pdns_help_en">English</button>
+		<button class="btn" id="pdns_help_zh" style="margin-left:6px">中文</button>
+	</div>
 </div>
 
-<p id="pdns_help_intro" style="color:#666; margin:0 0 14px 0"></p>
+<p id="pdns_help_intro" style="color:#666; margin:0 0 12px 0; line-height:1.5"></p>
+<div id="pdns_help_nav" style="display:flex; flex-wrap:wrap; gap:6px; margin:0 0 18px 0; padding:12px 14px; border:1px solid rgba(128,128,128,.22); border-radius:10px; background:rgba(128,128,128,.05)"></div>
 <div id="pdns_help_body"></div>
 
 <script type="text/javascript">//<![CDATA[
 (function () {
 	var INTRO = {
-		en: 'A plain-language guide to how photondns works and the terms used across these settings pages. Use the button to switch between English and 中文.',
-		zh: 'photondns 工作原理及各设置页面所用术语的通俗说明。使用按钮可在 English 与中文之间切换。'
+		en: 'A plain-language guide to how photondns works and the terms used across these settings pages. Tap a term below to jump to it, or switch language with the buttons.',
+		zh: 'photondns 工作原理及各设置页面所用术语的通俗说明。点击下方术语可跳转，或用按钮切换语言。'
 	};
+
+	// short jump-nav labels, in section order (matches HELP[] below)
+	var NAV = [
+		{ en: 'Overview', zh: '概述' }, { en: 'DNS', zh: 'DNS' },
+		{ en: 'IP address', zh: 'IP 地址' }, { en: 'Record types', zh: '记录类型' },
+		{ en: 'TTL', zh: 'TTL' }, { en: 'Cache', zh: '缓存' },
+		{ en: 'Fresh/stale', zh: '新鲜/过期' }, { en: 'Stale TTL', zh: '过期 TTL' },
+		{ en: 'Upstreams', zh: '上游' }, { en: 'Strategy', zh: '策略' },
+		{ en: 'Hedging', zh: '对冲' }, { en: 'DoT/DoH', zh: 'DoT/DoH' },
+		{ en: 'Prefetch', zh: '预取' }, { en: 'Failover', zh: '故障切换' },
+		{ en: 'Persist', zh: '持久化' }, { en: 'Blocking', zh: '拦截' }
+	];
+	var ACCENTS = ['#2563eb', '#0891b2', '#7c3aed', '#059669', '#d97706', '#db2777'];
+
+	function asDefLine(t) {
+		var m = t.match(/^([^—-]{1,40}?)\s[—-]\s(.+)$/);
+		if (m) return { term: m[1].replace(/\s+$/, ''), desc: m[2] };
+		m = t.match(/^([^:：]{1,40}?)[:：]\s(.+)$/);
+		if (m && /\(|default|默认/.test(m[1])) return { term: m[1].replace(/\s+$/, ''), desc: m[2] };
+		return null;
+	}
 
 	var HELP = [
 		{ en: { t: 'What is photondns?', b: [
@@ -45,6 +67,29 @@
 		] }, zh: { t: 'IP 地址', b: [
 			'计算机在互联网上的数字地址，例如 142.251.220.174（IPv4）或 2404:6800:4003::200e（IPv6）。DNS 的作用就是找出某个名字对应的 IP 地址。',
 			'一个名字可以对应多个 IP 地址，像 Google 这样的大型网站会不断更换地址以均衡负载——这也是 DNS 答案不会永远有效的原因（见 TTL）。'
+		] } },
+		{ en: { t: 'DNS record types (A, AAAA, CNAME, ...)', b: [
+			'A single name can hold several kinds of records, each answering a different question. The "type" of a query says which kind you want. The common ones:',
+			'A - the IPv4 address of a name (e.g. youtube.com -> 142.251.220.174). The most frequent query by far.',
+			'AAAA ("quad-A") - the IPv6 address of a name (e.g. ...:200e). Devices ask for A and AAAA together; if there is no IPv6, the AAAA answer is simply empty.',
+			'CNAME (canonical name) - an alias: "this name is really that other name, go look it up instead." e.g. www.example.com -> example.com. Used heavily by CDNs.',
+			'MX (mail exchange) - which mail server receives email for a domain. Only relevant to email, not web browsing.',
+			'TXT - free-form text attached to a name. Used for domain verification and email security (SPF, DKIM, DMARC).',
+			'NS (name server) - which servers are authoritative for a domain (who to ask for its records).',
+			'PTR (pointer) - the reverse lookup: an IP address back to a name. Used in "reverse DNS".',
+			'SOA (start of authority) - administrative info about a zone (its primary server, serial number, timers).',
+			'SRV - the host and port of a service (e.g. SIP, XMPP). HTTPS/SVCB (type 65) - newer records that let browsers learn how to connect (including HTTP/3) before making a request; Apple and Chrome query these a lot.'
+		] }, zh: { t: 'DNS 记录类型（A、AAAA、CNAME 等）', b: [
+			'同一个名字可以拥有多种记录，各自回答不同的问题。查询中的“类型”表明你想要哪一种。常见类型如下：',
+			'A —— 名字的 IPv4 地址（例如 youtube.com -> 142.251.220.174）。是迄今为止最常见的查询。',
+			'AAAA（读作 “quad-A”）—— 名字的 IPv6 地址（例如 ...:200e）。设备会同时查询 A 和 AAAA；若没有 IPv6，AAAA 答案就是空的。',
+			'CNAME（规范名/别名）—— 别名：“这个名字其实就是另一个名字，请改为查询它。” 例如 www.example.com -> example.com。CDN 大量使用。',
+			'MX（邮件交换）—— 指明某域名的邮件由哪台邮件服务器接收。只与电子邮件相关，与网页浏览无关。',
+			'TXT —— 附加在名字上的自由文本。用于域名归属验证和邮件安全（SPF、DKIM、DMARC）。',
+			'NS（名称服务器）—— 指明某域名的权威服务器（该向谁查询它的记录）。',
+			'PTR（指针）—— 反向查询：由 IP 地址反查名字。用于“反向 DNS”。',
+			'SOA（权威起始）—— 关于某区域的管理信息（主服务器、序列号、各计时器）。',
+			'SRV —— 某服务的主机与端口（例如 SIP、XMPP）。HTTPS/SVCB（类型 65）—— 较新的记录，让浏览器在发起请求前就了解如何连接（包括 HTTP/3）；Apple 与 Chrome 会大量查询这类记录。'
 		] } },
 		{ en: { t: 'TTL (Time To Live)', b: [
 			'A number that comes with every DNS answer, measured in seconds. It means "you may reuse this answer for this many seconds, then ask again." A record with TTL=300 may be cached for 5 minutes; TTL=1800 for 30 minutes.',
@@ -140,6 +185,7 @@
 
 	var lang = 'en';
 	var intro = document.getElementById('pdns_help_intro');
+	var nav  = document.getElementById('pdns_help_nav');
 	var body = document.getElementById('pdns_help_body');
 	var enBtn = document.getElementById('pdns_help_en');
 	var zhBtn = document.getElementById('pdns_help_zh');
@@ -150,13 +196,37 @@
 
 	function repaint() {
 		intro.textContent = INTRO[lang];
+
+		// jump-nav chips
+		var navHtml = '<span style="align-self:center; margin-right:4px; font-weight:600; color:#888; font-size:.85rem">' +
+			(lang === 'zh' ? '跳转到：' : 'Jump to:') + '</span>';
+		for (var k = 0; k < HELP.length; k++) {
+			var label = (NAV[k] && NAV[k][lang]) || HELP[k][lang].t;
+			navHtml += '<a href="#pdns-help-' + k + '" ' +
+				'style="display:inline-block; padding:3px 10px; border-radius:999px; font-size:.85rem; ' +
+				'text-decoration:none; color:#333; border:1px solid rgba(128,128,128,.3); background:#fff">' +
+				esc(label) + '</a>';
+		}
+		nav.innerHTML = navHtml;
+
+		// accent cards
 		var html = '';
 		for (var i = 0; i < HELP.length; i++) {
 			var s = HELP[i][lang];
-			html += '<div style="border:1px solid rgba(128,128,128,.28); border-radius:8px; padding:12px 16px; margin:10px 0; background:rgba(128,128,128,.04)">';
-			html += '<h3 style="margin:0 0 6px 0">' + esc(s.t) + '</h3>';
+			var accent = ACCENTS[i % ACCENTS.length];
+			html += '<div id="pdns-help-' + i + '" style="border:1px solid rgba(128,128,128,.22); ' +
+				'border-left:4px solid ' + accent + '; border-radius:10px; padding:14px 18px; margin:12px 0; ' +
+				'background:rgba(128,128,128,.03); scroll-margin-top:12px">';
+			html += '<h3 style="margin:0 0 8px 0; color:' + accent + '; font-size:1.05rem">' + esc(s.t) + '</h3>';
 			for (var j = 0; j < s.b.length; j++) {
-				html += '<p style="margin:6px 0; line-height:1.55">' + esc(s.b[j]) + '</p>';
+				var def = asDefLine(s.b[j]);
+				if (def) {
+					html += '<div style="display:flex; gap:10px; margin:5px 0; line-height:1.5">' +
+						'<code style="flex:0 0 auto; min-width:72px; color:' + accent + '; font-weight:600; background:transparent; padding:0">' +
+						esc(def.term) + '</code><span style="flex:1 1 auto">' + esc(def.desc) + '</span></div>';
+				} else {
+					html += '<p style="margin:7px 0; line-height:1.6">' + esc(s.b[j]) + '</p>';
+				}
 			}
 			html += '</div>';
 		}
@@ -173,6 +243,16 @@
 
 	enBtn.onclick = function () { setLang('en'); };
 	zhBtn.onclick = function () { setLang('zh'); };
+
+	// smooth-scroll for nav chips (event delegation)
+	nav.onclick = function (ev) {
+		var a = ev.target;
+		if (a && a.tagName === 'A' && a.getAttribute('href').indexOf('#pdns-help-') === 0) {
+			ev.preventDefault();
+			var el = document.getElementById(a.getAttribute('href').slice(1));
+			if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+		}
+	};
 
 	repaint();
 })();

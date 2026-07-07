@@ -64,6 +64,39 @@ var HELP = [
 		}
 	},
 	{
+		id: 'rrtypes',
+		en: {
+			title: 'DNS record types (A, AAAA, CNAME, ...)',
+			body: [
+				'A single name can hold several kinds of records, each answering a different question. The "type" of a query says which kind you want. The common ones:',
+				'A - the IPv4 address of a name (e.g. youtube.com -> 142.251.220.174). The most frequent query by far.',
+				'AAAA ("quad-A") - the IPv6 address of a name (e.g. ...:200e). Devices ask for A and AAAA together; if there is no IPv6, the AAAA answer is simply empty.',
+				'CNAME (canonical name) - an alias: "this name is really that other name, go look it up instead." e.g. www.example.com -> example.com. Used heavily by CDNs.',
+				'MX (mail exchange) - which mail server receives email for a domain. Only relevant to email, not web browsing.',
+				'TXT - free-form text attached to a name. Used for domain verification and email security (SPF, DKIM, DMARC).',
+				'NS (name server) - which servers are authoritative for a domain (who to ask for its records).',
+				'PTR (pointer) - the reverse lookup: an IP address back to a name. Used in "reverse DNS".',
+				'SOA (start of authority) - administrative info about a zone (its primary server, serial number, timers).',
+				'SRV - the host and port of a service (e.g. SIP, XMPP). HTTPS/SVCB (type 65) - newer records that let browsers learn how to connect (including HTTP/3) before making a request; Apple and Chrome query these a lot.'
+			]
+		},
+		zh: {
+			title: 'DNS 记录类型（A、AAAA、CNAME 等）',
+			body: [
+				'同一个名字可以拥有多种记录，各自回答不同的问题。查询中的“类型”表明你想要哪一种。常见类型如下：',
+				'A —— 名字的 IPv4 地址（例如 youtube.com -> 142.251.220.174）。是迄今为止最常见的查询。',
+				'AAAA（读作 “quad-A”）—— 名字的 IPv6 地址（例如 ...:200e）。设备会同时查询 A 和 AAAA；若没有 IPv6，AAAA 答案就是空的。',
+				'CNAME（规范名/别名）—— 别名：“这个名字其实就是另一个名字，请改为查询它。” 例如 www.example.com -> example.com。CDN 大量使用。',
+				'MX（邮件交换）—— 指明某域名的邮件由哪台邮件服务器接收。只与电子邮件相关，与网页浏览无关。',
+				'TXT —— 附加在名字上的自由文本。用于域名归属验证和邮件安全（SPF、DKIM、DMARC）。',
+				'NS（名称服务器）—— 指明某域名的权威服务器（该向谁查询它的记录）。',
+				'PTR（指针）—— 反向查询：由 IP 地址反查名字。用于“反向 DNS”。',
+				'SOA（权威起始）—— 关于某区域的管理信息（主服务器、序列号、各计时器）。',
+				'SRV —— 某服务的主机与端口（例如 SIP、XMPP）。HTTPS/SVCB（类型 65）—— 较新的记录，让浏览器在发起请求前就了解如何连接（包括 HTTP/3）；Apple 与 Chrome 会大量查询这类记录。'
+			]
+		}
+	},
+	{
 		id: 'ttl',
 		en: {
 			title: 'TTL (Time To Live)',
@@ -277,9 +310,49 @@ var HELP = [
 
 /* Short intro shown above the glossary. */
 var INTRO = {
-	en: 'A plain-language guide to how photondns works and the terms used across these settings pages. Use the button to switch between English and 中文.',
-	zh: 'photondns 工作原理及各设置页面所用术语的通俗说明。使用按钮可在 English 与中文之间切换。'
+	en: 'A plain-language guide to how photondns works and the terms used across these settings pages. Tap a term below to jump to it, or switch language with the buttons.',
+	zh: 'photondns 工作原理及各设置页面所用术语的通俗说明。点击下方术语可跳转，或用按钮切换语言。'
 };
+
+/* Short jump-nav labels per section id, in both languages. */
+var NAV = {
+	what:              { en: 'Overview',     zh: '概述' },
+	dns:               { en: 'DNS',          zh: 'DNS' },
+	ip:                { en: 'IP address',   zh: 'IP 地址' },
+	rrtypes:           { en: 'Record types', zh: '记录类型' },
+	ttl:               { en: 'TTL',          zh: 'TTL' },
+	cache:             { en: 'Cache',        zh: '缓存' },
+	fresh:             { en: 'Fresh/stale',  zh: '新鲜/过期' },
+	staleclientttl:    { en: 'Stale TTL',    zh: '过期 TTL' },
+	upstream:          { en: 'Upstreams',    zh: '上游' },
+	strategy:          { en: 'Strategy',     zh: '策略' },
+	hedge:             { en: 'Hedging',      zh: '对冲' },
+	dotdoh:            { en: 'DoT/DoH',      zh: 'DoT/DoH' },
+	prefetch:          { en: 'Prefetch',     zh: '预取' },
+	failover:          { en: 'Failover',     zh: '故障切换' },
+	servestale_persist:{ en: 'Persist',      zh: '持久化' },
+	block:             { en: 'Blocking',     zh: '拦截' }
+};
+
+/* An accent color per section, cycled, so cards read as a set but are
+ * distinguishable at a glance. */
+var ACCENTS = ['#2563eb', '#0891b2', '#7c3aed', '#059669', '#d97706', '#db2777'];
+
+/*
+ * Split a body string into a {term, desc} pair when it looks like a
+ * definition line ("A - the IPv4 address ...", "race (default): ..."),
+ * so those render as a tidy definition list instead of a paragraph.
+ * Returns null for ordinary prose.
+ */
+function asDefLine(t) {
+	// "TERM - desc"  (dash surrounded by spaces), TERM kept short
+	var m = t.match(/^([^—-]{1,40}?)\s[—-]\s(.+)$/);
+	if (m) return { term: m[1].trim(), desc: m[2].trim() };
+	// "term (default): desc"  -> emphasize up to the first colon
+	m = t.match(/^([^:：]{1,40}?)[:：]\s(.+)$/);
+	if (m && /\(|default|默认/.test(m[1])) return { term: m[1].trim(), desc: m[2].trim() };
+	return null;
+}
 
 return view.extend({
 	load: function () {
@@ -287,30 +360,75 @@ return view.extend({
 	},
 
 	render: function () {
-		var self = this;
 		var lang = 'en';
 
-		var intro = E('p', { style: 'color:#666; margin:0 0 14px 0' }, INTRO[lang]);
+		var intro = E('p', { style: 'color:var(--fg-color-2,#666); margin:0 0 12px 0; line-height:1.5' }, INTRO[lang]);
+		var nav = E('div', {
+			style: 'display:flex; flex-wrap:wrap; gap:6px; margin:0 0 18px 0; ' +
+				'padding:12px 14px; border:1px solid rgba(128,128,128,.22); border-radius:10px; ' +
+				'background:rgba(128,128,128,.05)'
+		});
 		var container = E('div', {});
 
-		function card(section) {
+		function bodyNode(t, accent) {
+			var def = asDefLine(t);
+			if (def) {
+				return E('div', {
+					style: 'display:flex; gap:10px; margin:5px 0; line-height:1.5'
+				}, [
+					E('code', {
+						style: 'flex:0 0 auto; min-width:72px; color:' + accent + '; ' +
+							'font-weight:600; background:transparent; padding:0'
+					}, def.term),
+					E('span', { style: 'flex:1 1 auto' }, def.desc)
+				]);
+			}
+			return E('p', { style: 'margin:7px 0; line-height:1.6' }, t);
+		}
+
+		function card(section, idx) {
 			var s = section[lang];
-			var paras = s.body.map(function (t) {
-				return E('p', { style: 'margin:6px 0; line-height:1.55' }, t);
-			});
+			var accent = ACCENTS[idx % ACCENTS.length];
+			var body = s.body.map(function (t) { return bodyNode(t, accent); });
 			return E('div', {
-				style: 'border:1px solid rgba(128,128,128,.28); border-radius:8px; ' +
-					'padding:12px 16px; margin:10px 0; background:rgba(128,128,128,.04)'
+				id: 'help-' + section.id,
+				style: 'border:1px solid rgba(128,128,128,.22); border-left:4px solid ' + accent + '; ' +
+					'border-radius:10px; padding:14px 18px; margin:12px 0; ' +
+					'background:var(--background-color-high,rgba(128,128,128,.03)); ' +
+					'scroll-margin-top:12px'
 			}, [
-				E('h3', { style: 'margin:0 0 6px 0' }, s.title)
-			].concat(paras));
+				E('h3', {
+					style: 'margin:0 0 8px 0; color:' + accent + '; font-size:1.05rem'
+				}, s.title)
+			].concat(body));
+		}
+
+		function navChip(section) {
+			var label = (NAV[section.id] && NAV[section.id][lang]) || section[lang].title;
+			return E('a', {
+				href: '#help-' + section.id,
+				style: 'display:inline-block; padding:3px 10px; border-radius:999px; ' +
+					'font-size:.85rem; text-decoration:none; color:var(--fg-color,#333); ' +
+					'border:1px solid rgba(128,128,128,.3); background:var(--background-color,#fff)',
+				click: function (ev) {
+					ev.preventDefault();
+					var el = document.getElementById('help-' + section.id);
+					if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+				}
+			}, label);
 		}
 
 		function repaint() {
 			intro.textContent = INTRO[lang];
+			nav.innerHTML = '';
+			nav.appendChild(E('span', {
+				style: 'align-self:center; margin-right:4px; font-weight:600; ' +
+					'color:var(--fg-color-2,#888); font-size:.85rem'
+			}, lang === 'zh' ? '跳转到：' : 'Jump to:'));
 			container.innerHTML = '';
-			HELP.forEach(function (section) {
-				container.appendChild(card(section));
+			HELP.forEach(function (section, idx) {
+				nav.appendChild(navChip(section));
+				container.appendChild(card(section, idx));
 			});
 		}
 
@@ -321,7 +439,6 @@ return view.extend({
 				'data-code': code,
 				click: function (ev) {
 					lang = code;
-					// reflect active state on both buttons
 					Array.prototype.forEach.call(
 						ev.target.parentNode.querySelectorAll('button'),
 						function (b) {
@@ -337,17 +454,20 @@ return view.extend({
 		var zhBtn = mkLangBtn('zh', '中文');
 		enBtn.classList.add('cbi-button-positive');
 
-		var toolbar = E('div', { style: 'margin:0 0 8px 0' }, [
-			E('span', { style: 'margin-right:10px; color:#888' }, '📖'),
-			enBtn, zhBtn
+		var header = E('div', {
+			style: 'display:flex; align-items:center; justify-content:space-between; ' +
+				'flex-wrap:wrap; gap:8px; margin:0 0 4px 0'
+		}, [
+			E('h2', { style: 'margin:0' }, '📖 photondns — Help & Glossary'),
+			E('div', {}, [enBtn, zhBtn])
 		]);
 
 		repaint();
 
 		return E('div', { class: 'cbi-map' }, [
-			E('h2', {}, 'photondns — Help & Glossary'),
-			toolbar,
+			header,
 			intro,
+			nav,
 			container
 		]);
 	},
