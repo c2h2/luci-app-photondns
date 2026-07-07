@@ -49,6 +49,8 @@ get_config() {
 	config_get idle_timeout $1 idle_timeout 30
 	config_get reject_type65 $1 reject_type65 0
 	config_get aaaa_mode $1 aaaa_mode "allow"
+	config_get prewarm $1 prewarm 1
+	config_get prewarm_interval $1 prewarm_interval 3000
 	config_get china_list $1 china_list 0
 	config_get adblock $1 adblock 0
 	config_get query_log_size $1 query_log_size 5000
@@ -89,6 +91,10 @@ generate_config() {
 	local china_list_file=""
 	[ "$china_list" = "1" ] && [ -n "$local_list" ] && [ -f "$RULE_DIR/china_list.txt" ] && \
 		china_list_file="$RULE_DIR/china_list.txt"
+
+	local prewarm_file=""
+	[ "$prewarm" = "1" ] && [ -f "$RULE_DIR/prewarm.txt" ] && \
+		prewarm_file="$RULE_DIR/prewarm.txt"
 
 	local ad_list_file=""
 	[ "$adblock" = "1" ] && [ -f "$RULE_DIR/ad_list.txt" ] && \
@@ -145,6 +151,10 @@ generate_config() {
 	redirect_file = "$RULE_DIR/redirect.txt"
 	reject_type65 = $(bool_str $reject_type65)
 	aaaa_mode = "$aaaa_mode"
+
+	[prewarm]
+	domains_file = "$prewarm_file"
+	interval = $prewarm_interval
 
 	[[group]]
 	name = "main"

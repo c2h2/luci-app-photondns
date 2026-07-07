@@ -175,6 +175,16 @@ o:value("block_if_ipv4", translate("Block if IPv4 exists"))
 o:value("block_all", translate("Block all IPv6"))
 o.default = "allow"
 
+o = s:taboption("basic", Flag, "prewarm", translate("Prewarm popular domains"),
+	translate("Keep a list of domains (default: YouTube/Google) always resolved so a first visit is never a slow cold miss. Edit the list under Rules."))
+o.default = "1"
+
+o = s:taboption("basic", Value, "prewarm_interval", translate("Prewarm interval (s)"),
+	translate("How often to refresh the prewarm domains; keep it below the cache stale lifetime so they never fully expire. 0 = only at startup."))
+o.datatype = "and(uinteger,min(0),max(86400))"
+o.default = "3000"
+o:depends("prewarm", "1")
+
 o = s:taboption("basic", Value, "query_log_size", translate("Query log size"),
 	translate("Number of recent queries kept in memory for the Query Log page; 0 disables it"))
 o.datatype = "and(uinteger,max(65536))"

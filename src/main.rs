@@ -111,6 +111,7 @@ async fn run(cfg: config::Config) -> Result<()> {
 
     server::spawn_refresher(ctx.clone(), refresh_rx);
     group::spawn_prober(groups, &ctx.cfg.failover);
+    server::spawn_prewarmer(ctx.clone());
 
     for addr_str in &ctx.cfg.server.listen {
         let addr: std::net::SocketAddr = addr_str

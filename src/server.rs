@@ -570,10 +570,118 @@ pub fn spawn_refresher(ctx: Arc<Ctx>, mut rx: mpsc::Receiver<RefreshJob>) {
     });
 }
 
+/// Resolve one (name, qtype) through the group and store it in cache, exactly
+/// as a real query would. Best-effort: errors are logged and ignored.
+async fn prewarm_one(ctx: &Arc<Ctx>, name: &str, qtype: u16) {
+    let Some(q) = dns::build_query(name, qtype, 1) else {
+        return;
+    };
+    let key = cache::make_key(name, qtype, 1);
+    let group = ctx.group_for(name, qtype);
+    match group.resolve(&q, &ctx.stats).await {
+        Ok((mut resp, _)) => {
+            if let Some(rmeta) = dns::parse_query(&resp) {
+                if rmeta.qname == name {
+                    cache_store(ctx, key, &mut resp, rmeta.question_end);
+                }
+            }
+        }
+        Err(e) => log::debug!("prewarm {} failed: {}", name, e),
+    }
+}
+
+/// Keep a fixed list of domains resolved so a first visit is never a cold
+/// miss. Runs once at startup, then every `interval` seconds (if > 0). Domains
+/// are read fresh each pass so edits to the file take effect without a restart.
+///
+/// Parse a prewarm domain list: trim, drop blanks and #comments, lowercase.
+pub fn parse_prewarm_list(s: &str) -> Vec<String> {
+    s.lines()
+        .map(|l| l.trim())
+        .filter(|l| !l.is_empty() && !l.starts_with('#'))
+        .map(|l| l.to_ascii_lowercase())
+        .collect()
+}
+
+pub fn spawn_prewarmer(ctx: Arc<Ctx>) {
+    let path = ctx.cfg.prewarm.domains_file.clone();
+    if path.is_empty() {
+        return;
+    }
+    let interval = ctx.cfg.prewarm.interval;
+    tokio::spawn(async move {
+        // small settle delay so upstreams/prober are up before the first pass
+        tokio::time::sleep(Duration::from_secs(3)).await;
+        loop {
+            let domains: Vec<String> = match std::fs::read_to_string(&path) {
+                Ok(s) => parse_prewarm_list(&s),
+                Err(e) => {
+                    log::warn!("prewarm: cannot read {}: {}", path, e);
+                    Vec::new()
+                }
+            };
+            if !domains.is_empty() {
+                let n = domains.len();
+                // bounded concurrency so a big list does not stampede the tunnel
+                let sem = Arc::new(tokio::sync::Semaphore::new(8));
+                let mut tasks = Vec::with_capacity(n * 2);
+                for name in domains {
+                    for qtype in [dns::TYPE_A, dns::TYPE_AAAA] {
+                        let ctx = ctx.clone();
+                        let sem = sem.clone();
+                        let name = name.clone();
+                        tasks.push(tokio::spawn(async move {
+                            let _permit = sem.acquire().await;
+                            prewarm_one(&ctx, &name, qtype).await;
+                        }));
+                    }
+                }
+                for t in tasks {
+                    let _ = t.await;
+                }
+                log::info!("prewarm: refreshed {} domains", n);
+            }
+            if interval == 0 {
+                break;
+            }
+            tokio::time::sleep(Duration::from_secs(interval)).await;
+        }
+    });
+}
+
 fn clear_refreshing(ctx: &Arc<Ctx>, key: &cache::CacheKey) {
     if let Some(cache) = &ctx.cache {
         if let Some((entry, _)) = cache.get(key, Instant::now()) {
             entry.refreshing.store(false, Ordering::Release);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_prewarm_list;
+
+    #[test]
+    fn prewarm_list_parsing() {
+        let input = "\
+# YouTube set
+www.youtube.com
+  I.Ytimg.com  
+
+# comment
+googlevideo.com
+   # indented comment
+";
+        let got = parse_prewarm_list(input);
+        assert_eq!(
+            got,
+            vec![
+                "www.youtube.com".to_string(),
+                "i.ytimg.com".to_string(), // trimmed + lowercased
+                "googlevideo.com".to_string(),
+            ]
+        );
+        // blanks, comments (including indented) dropped
+        assert!(!got.iter().any(|d| d.starts_with('#') || d.is_empty()));
     }
 }

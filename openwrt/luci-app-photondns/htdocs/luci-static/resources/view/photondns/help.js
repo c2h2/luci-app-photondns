@@ -279,6 +279,25 @@ var HELP = [
 		}
 	},
 	{
+		id: 'prewarm',
+		en: {
+			title: 'Prewarm (keep popular domains hot)',
+			body: [
+				'The first time any name is looked up it pays the full upstream round trip (about 200 ms over the encrypted tunnel here). A page like YouTube pulls dozens of domains; on a fresh visit each cold one adds ~200 ms, which stacks into a visible delay before the page and video start.',
+				'Prewarm fixes this: photondns keeps a list of domains (default: the YouTube/Google set) permanently resolved. It resolves them at startup and again on the "Prewarm interval" (default every 50 minutes, inside the stale window), so they never fall out of cache. A real visit then hits warm entries (~2 ms) instead of cold misses.',
+				'Measured here: a cold YouTube page load dropped from ~6.3 s of DNS to ~0.1 s once its domains were prewarmed. Edit the domain list on the Rules page; disable it or change the interval in Basic Settings.'
+			]
+		},
+		zh: {
+			title: '预热（让热门域名保持“热”）',
+			body: [
+				'任何名字第一次被查询时都要承担完整的上游往返（此处经加密隧道约 200 毫秒）。像 YouTube 这样的页面会拉取数十个域名；首次访问时每个冷域名都会增加约 200 毫秒，累积起来就是页面和视频启动前的明显延迟。',
+				'预热解决了这个问题：photondns 会让一份域名列表（默认是 YouTube/Google 那组）始终保持已解析。它在启动时解析一次，并按“预热间隔”（默认每 50 分钟，处于过期窗口之内）再次刷新，使它们永不掉出缓存。这样真实访问就会命中热条目（约 2 毫秒），而非冷未命中。',
+				'实测：一次冷启动的 YouTube 页面，其 DNS 加载在预热后从约 6.3 秒降到约 0.1 秒。可在“规则”页编辑域名列表；在“基本设置”中关闭该功能或修改间隔。'
+			]
+		}
+	},
+	{
 		id: 'failover',
 		en: {
 			title: 'Failover & health checks',
@@ -353,6 +372,7 @@ var NAV = {
 	dotdoh:            { en: 'DoT/DoH',      zh: 'DoT/DoH' },
 	ipv6:              { en: 'IPv6/AAAA',    zh: 'IPv6/AAAA' },
 	prefetch:          { en: 'Prefetch',     zh: '预取' },
+	prewarm:           { en: 'Prewarm',      zh: '预热' },
 	failover:          { en: 'Failover',     zh: '故障切换' },
 	servestale_persist:{ en: 'Persist',      zh: '持久化' },
 	block:             { en: 'Blocking',     zh: '拦截' }

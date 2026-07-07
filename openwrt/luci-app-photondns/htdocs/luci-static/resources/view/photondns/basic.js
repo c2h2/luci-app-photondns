@@ -227,6 +227,16 @@ return view.extend({
 		o.value('block_all', _('Block all IPv6'));
 		o.default = 'allow';
 
+		o = s.taboption('basic', form.Flag, 'prewarm', _('Prewarm popular domains'),
+			_('Keep a list of domains (default: YouTube/Google) always resolved so a first visit is never a slow cold miss. Edit the list under Rules.'));
+		o.default = true;
+
+		o = s.taboption('basic', form.Value, 'prewarm_interval', _('Prewarm interval (s)'),
+			_('How often to refresh the prewarm domains; keep it below the cache stale lifetime so they never fully expire. 0 = only at startup.'));
+		o.datatype = 'and(uinteger,min(0),max(86400))';
+		o.default = '3000';
+		o.depends('prewarm', '1');
+
 		o = s.taboption('basic', form.Value, 'query_log_size', _('Query log size'),
 			_('Number of recent queries kept in memory for the Query Log page; 0 disables it'));
 		o.datatype = 'and(uinteger,max(65536))';

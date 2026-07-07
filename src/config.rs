@@ -15,9 +15,25 @@ pub struct Config {
     pub failover: FailoverCfg,
     #[serde(default)]
     pub routing: RoutingCfg,
+    #[serde(default)]
+    pub prewarm: PrewarmCfg,
     /// upstream groups; group "main" is the default route target
     #[serde(default, rename = "group")]
     pub groups: Vec<GroupCfg>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
+pub struct PrewarmCfg {
+    /// file of domains (one per line) to keep resolved so a first visit is
+    /// never a cold miss; "" = disabled
+    #[serde(default)]
+    pub domains_file: String,
+    /// seconds between prewarm passes; also runs once at startup. Keep it
+    /// below the cache stale window so entries never fully expire. 0 = only
+    /// prewarm once at startup.
+    #[serde(default = "default_prewarm_interval")]
+    pub interval: u64,
 }
 
 #[derive(Debug, Deserialize)]
@@ -264,6 +280,9 @@ fn default_hosts_ttl() -> u32 {
 }
 fn default_aaaa_mode() -> String {
     "allow".into()
+}
+fn default_prewarm_interval() -> u64 {
+    3000
 }
 fn default_strategy() -> String {
     "race".into()

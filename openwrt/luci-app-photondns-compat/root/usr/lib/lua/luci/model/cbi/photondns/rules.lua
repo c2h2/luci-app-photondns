@@ -11,6 +11,8 @@ local RULE_FILES = {
 		translate('Domains resolved by the "local" upstream group (configure Local-domain DNS servers first).') },
 	{ "redirect", "/etc/photondns/redirect.txt", translate("Redirect"),
 		translate('"<from-domain> <to-domain>" per line: answer queries for from-domain with the records of to-domain.') },
+	{ "prewarm", "/etc/photondns/prewarm.txt", translate("Prewarm"),
+		translate('Domains kept always-resolved (one per line) so a first visit is never a slow cold miss. Default set = YouTube/Google. Enable "Prewarm popular domains" in Basic Settings.') },
 }
 
 local m, s, o
