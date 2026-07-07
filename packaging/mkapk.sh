@@ -4,9 +4,10 @@
 # usage: mkapk.sh <staging_dir> <name> <version> <arch> <description> <out.apk> \
 #                 [depends] [postinst_script] [--conf path ...]
 #
-# Requires the `apk` binary (apk-tools >= 3.0), which is what OpenWrt 24.10+
-# uses. Unsigned packages are produced; OpenWrt installs them when the repo /
-# --allow-untrusted is set, which the install-test step passes explicitly.
+# Requires the `apk` binary (apk-tools >= 3.0), which is what OpenWrt 25.12+
+# uses (24.10 and earlier still use opkg/.ipk). Unsigned packages are
+# produced; OpenWrt installs them when the repo / --allow-untrusted is set,
+# which the install-test step passes explicitly.
 #
 # This script is Linux-only (there is no apk-tools for macOS); it is invoked
 # from the CI Linux runner, not from local macOS testing.

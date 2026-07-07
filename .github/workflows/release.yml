@@ -1,10 +1,11 @@
 name: build-packages
 
 # Cross-compiles the photondns Rust daemon for a spread of OpenWrt
-# architectures, assembles .ipk (opkg, <=23.05) and .apk (apk-tools, >=24.10)
+# architectures, assembles .ipk (opkg, <=24.10) and .apk (apk-tools, >=25.12)
 # packages for the daemon plus the two architecture-independent LuCI apps,
-# verifies an .ipk actually installs in a real OpenWrt rootfs, and attaches
-# everything to a GitHub Release on tag push.
+# verifies the packages actually install in real OpenWrt rootfses (opkg on
+# 23.05/24.10, apk on 25.12), and attaches everything to a GitHub Release on
+# tag push.
 #
 # Also ships each daemon build as a standalone static binary
 # (photondns-<ver>-<arch>-linux-musl) — no OpenWrt needed, runs on any
@@ -64,9 +65,10 @@ jobs:
 
       - name: Install apk-tools 3.x (for .apk output)
         run: |
-          # OpenWrt 24.10+ uses apk-tools 3.x; grab the Alpine static build,
-          # which ships `apk mkpkg`. An .apk is just a gzip tarball, so we can
-          # unpack the static binary without needing apk itself.
+          # OpenWrt 25.12+ uses apk-tools 3.x (24.10 and earlier still use
+          # opkg); grab the Alpine static build, which ships `apk mkpkg`. An
+          # Alpine v2 .apk is just a gzip tarball, so we can unpack the static
+          # binary without needing apk itself.
           url="https://dl-cdn.alpinelinux.org/alpine/edge/main/x86_64/apk-tools-static-3.0.6-r0.apk"
           curl -fsSL "$url" -o /tmp/apk-static.apk
           tar xzf /tmp/apk-static.apk -C /tmp sbin/apk.static
@@ -101,14 +103,16 @@ jobs:
 
   # -------------------------------------------------- install-verification
   verify:
-    name: verify ipk installs (OpenWrt ${{ matrix.tag }})
+    name: verify ${{ matrix.pm }} installs (OpenWrt ${{ matrix.tag }})
     needs: build
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { arch: x86_64, tag: '23.05.6' }
+          - { arch: x86_64, tag: '23.05.6', pm: opkg }  # last opkg/.ipk LTS
+          - { arch: x86_64, tag: '24.10.7', pm: opkg }  # 24.10 still uses opkg
+          - { arch: x86_64, tag: '25.12.4', pm: apk }   # first apk/.apk release
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -116,9 +120,10 @@ jobs:
           path: dist
       - uses: actions/download-artifact@v4
         with:
-          name: packages-aarch64   # the LuCI (arch: all) ipks live here
+          name: packages-aarch64   # the LuCI (arch: all) packages live here
           path: luci
       - name: opkg install inside an OpenWrt rootfs
+        if: matrix.pm == 'opkg'
         run: |
           set -e
           cp luci/luci-app-photondns_*_all.ipk dist/ 2>/dev/null || true
@@ -144,6 +149,38 @@ jobs:
             test -f ./etc/init.d/photondns && echo "init script present: OK"
             # control metadata sane?
             tar xzf ./control.tar.gz ./control && grep -q "^Package: luci-app-photondns$" ./control && echo "control ok: OK"
+            echo "VERIFY OK"
+          '
+
+      - name: apk install inside an OpenWrt rootfs
+        if: matrix.pm == 'apk'
+        run: |
+          set -e
+          cp luci/luci-app-photondns_*_all.apk dist/ 2>/dev/null || true
+          docker run --rm -v "$PWD/dist:/pkgs" openwrt/rootfs:${{ matrix.arch }}-${{ matrix.tag }} sh -c '
+            set -e
+            # The daemon package has no dependencies, so install it for real
+            # from the local file, offline (no feeds needed). Our packages are
+            # unsigned, hence --allow-untrusted.
+            apk add --allow-untrusted --repositories-file /dev/null \
+              /pkgs/photondns_*_'"${{ matrix.arch }}"'.apk
+            echo "--- installed ---"
+            apk list --installed 2>/dev/null | grep photondns || true
+            test -x /usr/bin/photondns && echo "binary present + executable: OK"
+            # config-only validate (no upstreams reachable in CI, just parse)
+            printf "[server]\nlisten=[\"127.0.0.1:15533\"]\n[[group]]\nname=\"main\"\nupstreams=[\"udp://127.0.0.1:1\"]\n" > /tmp/t.toml
+            /usr/bin/photondns -t -c /tmp/t.toml && echo "config validate: OK"
+
+            # LuCI app (arch: all): its deps (curl/rpcd/rpcd-mod-ucode) are not
+            # resolvable offline, so verify by extracting the payload with apk
+            # itself (APKv3 is not a plain tarball) and checking it lands.
+            apk extract --allow-untrusted --destination /tmp/luci \
+              /pkgs/luci-app-photondns_*_all.apk
+            echo "--- extracted files ---"
+            find /tmp/luci -type f | sort
+            find /tmp/luci -path "*/usr/share/rpcd/ucode/luci.photondns" | grep -q . && echo "ucode backend present: OK"
+            find /tmp/luci -path "*/www/luci-static/resources/view/photondns/status.js" | grep -q . && echo "luci views present: OK"
+            find /tmp/luci -path "*/etc/init.d/photondns" | grep -q . && echo "init script present: OK"
             echo "VERIFY OK"
           '
 

@@ -164,13 +164,13 @@ or serve TLS natively: `doh_cert = "/path/fullchain.pem"`,
 
 OpenWrt — prebuilt packages (recommended). Each
 [release](https://github.com/c2h2/luci-app-photondns/releases) ships
-`.ipk` (opkg, ≤ 23.05) and `.apk` (apk, ≥ 24.10) for aarch64, x86_64, armv7,
+`.ipk` (opkg, ≤ 24.10) and `.apk` (apk, ≥ 25.12) for aarch64, x86_64, armv7,
 and riscv64, plus the two arch-independent LuCI apps:
 
 ```sh
-# opkg (OpenWrt ≤ 23.05) — pick your arch
+# opkg (OpenWrt ≤ 24.10) — pick your arch
 opkg install photondns_*_aarch64_generic.ipk luci-app-photondns_*_all.ipk
-# apk (OpenWrt ≥ 24.10)
+# apk (OpenWrt ≥ 25.12)
 apk add --allow-untrusted photondns_*_aarch64_generic.apk luci-app-photondns_*_all.apk
 uci set photondns.main.enabled=1; uci commit photondns; /etc/init.d/photondns restart
 ```
