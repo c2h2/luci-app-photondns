@@ -84,6 +84,7 @@ pub struct CacheCfg {
     /// persist cache across restarts ("" = disabled)
     #[serde(default)]
     pub dump_file: String,
+    /// seconds between periodic cache dumps (0 = dump only on shutdown)
     #[serde(default = "default_dump_interval")]
     pub dump_interval: u64,
 }
@@ -227,7 +228,7 @@ fn default_prefetch_hits() -> u32 {
     2
 }
 fn default_dump_interval() -> u64 {
-    3600
+    0
 }
 fn default_api_listen() -> String {
     "127.0.0.1:8053".into()

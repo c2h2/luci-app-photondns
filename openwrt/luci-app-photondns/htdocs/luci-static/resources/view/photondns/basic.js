@@ -420,13 +420,14 @@ return view.extend({
 		o.depends('cache', '1');
 
 		o = s.taboption('cache', form.Flag, 'dump_cache', _('Persist cache to disk'),
-			_('Save the cache on shutdown and periodically; restore it on startup'));
+			_('Save the cache on shutdown (and optionally at intervals); restore it on startup'));
 		o.default = true;
 		o.depends('cache', '1');
 
-		o = s.taboption('cache', form.Value, 'dump_interval', _('Cache save interval (s)'));
-		o.datatype = 'and(uinteger,min(60))';
-		o.default = '3600';
+		o = s.taboption('cache', form.Value, 'dump_interval', _('Cache save interval (s)'),
+			_('0 = save only on shutdown (spares flash wear); otherwise dump every N seconds'));
+		o.datatype = 'and(uinteger,min(0))';
+		o.default = '0';
 		o.depends('dump_cache', '1');
 
 		return m.render();

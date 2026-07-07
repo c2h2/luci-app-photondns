@@ -372,13 +372,14 @@ o.default = "1"
 o:depends("cache", "1")
 
 o = s:taboption("cache", Flag, "dump_cache", translate("Persist cache to disk"),
-	translate("Save the cache on shutdown and periodically; restore it on startup"))
+	translate("Save the cache on shutdown (and optionally at intervals); restore it on startup"))
 o.default = "1"
 o:depends("cache", "1")
 
-o = s:taboption("cache", Value, "dump_interval", translate("Cache save interval (s)"))
-o.datatype = "and(uinteger,min(60))"
-o.default = "3600"
+o = s:taboption("cache", Value, "dump_interval", translate("Cache save interval (s)"),
+	translate("0 = save only on shutdown (spares flash wear); otherwise dump every N seconds"))
+o.datatype = "and(uinteger,min(0))"
+o.default = "0"
 o:depends("dump_cache", "1")
 
 function m.on_after_commit(self)

@@ -376,11 +376,14 @@ msgstr "在到期前主动刷新高频条目，使其永不过期"
 msgid "Persist cache to disk"
 msgstr "缓存持久化"
 
-msgid "Save the cache on shutdown and periodically; restore it on startup"
-msgstr "关闭时及定期保存缓存；启动时恢复"
+msgid "Save the cache on shutdown (and optionally at intervals); restore it on startup"
+msgstr "关闭时保存缓存（也可按间隔保存）；启动时恢复"
 
 msgid "Cache save interval (s)"
 msgstr "缓存保存间隔（秒）"
+
+msgid "0 = save only on shutdown (spares flash wear); otherwise dump every N seconds"
+msgstr "0 = 仅在关闭时保存（减少闪存损耗）；否则每 N 秒转储一次"
 
 msgid "Rule files are applied on service restart."
 msgstr "规则文件在服务重启后生效。"
