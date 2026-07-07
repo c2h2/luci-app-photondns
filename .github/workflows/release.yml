@@ -134,6 +134,8 @@ jobs:
             echo "--- installed files ---"
             opkg files photondns
             test -x /usr/bin/photondns && echo "binary present + executable: OK"
+            test -x /etc/init.d/photondns && echo "init script present: OK"
+            test -f /etc/config/photondns && echo "uci config present: OK"
             # config-only validate (no upstreams reachable in CI, just parse)
             printf "[server]\nlisten=[\"127.0.0.1:15533\"]\n[[group]]\nname=\"main\"\nupstreams=[\"udp://127.0.0.1:1\"]\n" > /tmp/t.toml
             /usr/bin/photondns -t -c /tmp/t.toml && echo "config validate: OK"
@@ -146,7 +148,6 @@ jobs:
             tar xzf ./data.tar.gz
             test -f ./usr/share/rpcd/ucode/luci.photondns && echo "ucode backend present: OK"
             test -f ./www/luci-static/resources/view/photondns/status.js && echo "luci views present: OK"
-            test -f ./etc/init.d/photondns && echo "init script present: OK"
             # control metadata sane?
             tar xzf ./control.tar.gz ./control && grep -q "^Package: luci-app-photondns$" ./control && echo "control ok: OK"
             echo "VERIFY OK"
@@ -167,6 +168,8 @@ jobs:
             echo "--- installed ---"
             apk list --installed 2>/dev/null | grep photondns || true
             test -x /usr/bin/photondns && echo "binary present + executable: OK"
+            test -x /etc/init.d/photondns && echo "init script present: OK"
+            test -f /etc/config/photondns && echo "uci config present: OK"
             # config-only validate (no upstreams reachable in CI, just parse)
             printf "[server]\nlisten=[\"127.0.0.1:15533\"]\n[[group]]\nname=\"main\"\nupstreams=[\"udp://127.0.0.1:1\"]\n" > /tmp/t.toml
             /usr/bin/photondns -t -c /tmp/t.toml && echo "config validate: OK"
@@ -182,7 +185,6 @@ jobs:
             find /tmp/luci -type f | sort
             find /tmp/luci -path "*/usr/share/rpcd/ucode/luci.photondns" | grep -q . && echo "ucode backend present: OK"
             find /tmp/luci -path "*/www/luci-static/resources/view/photondns/status.js" | grep -q . && echo "luci views present: OK"
-            find /tmp/luci -path "*/etc/init.d/photondns" | grep -q . && echo "init script present: OK"
             echo "VERIFY OK"
           '
 

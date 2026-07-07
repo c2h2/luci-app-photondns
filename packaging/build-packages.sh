@@ -42,6 +42,12 @@ WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
 stage="$WORK/photondns"
 mkdir -p "$stage/usr/bin"
 install -m 0755 "$BIN" "$stage/usr/bin/photondns"
+# Shared OpenWrt plumbing (uci config, procd init script, list-update
+# helpers, default rule files) ships with the daemon so that either LuCI
+# app — or a headless install — gets a working service.
+cp -R "$REPO/openwrt/photondns/root/." "$stage/"
+find "$stage/etc/init.d" "$stage/etc/uci-defaults" "$stage/usr/bin" -type f \
+	-exec chmod 0755 {} +
 
 ctrl="$WORK/photondns.control"
 cat > "$ctrl" <<EOF
@@ -58,13 +64,34 @@ Description: High-performance DNS forwarder written in Rust.
  per-upstream health tracking.
 EOF
 
+# preserve user config across upgrades
+dconf="$WORK/photondns.conffiles"
+echo "/etc/config/photondns" > "$dconf"
+
+# postinst: apply uci-defaults (default rule files) and register the
+# service, as opkg's default_postinst would for an in-tree package.
+dpost="$WORK/photondns.postinst"
+{
+	echo '#!/bin/sh'
+	echo '[ -n "${IPKG_INSTROOT}" ] && exit 0'
+	for d in "$stage"/etc/uci-defaults/*; do
+		[ -f "$d" ] || continue
+		base="$(basename "$d")"
+		echo "[ -f /etc/uci-defaults/$base ] && ( . /etc/uci-defaults/$base ) && rm -f /etc/uci-defaults/$base"
+	done
+	echo '/etc/init.d/photondns enable 2>/dev/null || true'
+	echo 'exit 0'
+} > "$dpost"
+
 bash "$HERE/mkipk.sh" "$stage" "$ctrl" \
-	"$OUT/photondns_${VERSION}-${RELEASE}_${ARCH}.ipk"
+	"$OUT/photondns_${VERSION}-${RELEASE}_${ARCH}.ipk" \
+	"$dconf" "$dpost"
 
 if [ "${EMIT_APK:-0}" = "1" ]; then
 	bash "$HERE/mkapk.sh" "$stage" photondns "$VERSION-r$RELEASE" "$ARCH" \
 		"High-performance DNS forwarder written in Rust" \
-		"$OUT/photondns_${VERSION}-${RELEASE}_${ARCH}.apk"
+		"$OUT/photondns_${VERSION}-${RELEASE}_${ARCH}.apk" \
+		"" "$dpost"
 fi
 
 # ------------------------------------------------------ LuCI apps (arch: all)
@@ -106,12 +133,6 @@ License: GPL-3.0-only
 Depends: $deps
 Description: $desc
 EOF
-		# preserve user config + rule files across upgrades
-		local conf="$WORK/$pkg.conffiles"
-		{
-			echo "/etc/config/photondns"
-		} > "$conf"
-
 		# postinst: run this package's uci-defaults + clear luci cache,
 		# exactly as opkg's default_postinst would.
 		local post="$WORK/$pkg.postinst"
@@ -133,7 +154,7 @@ EOF
 
 		bash "$HERE/mkipk.sh" "$s" "$c" \
 			"$OUT/${pkg}_${VERSION}-${RELEASE}_all.ipk" \
-			"$conf" "$post"
+			"" "$post"
 
 		if [ "${EMIT_APK:-0}" = "1" ]; then
 			# apk depends: space-separated, no commas
