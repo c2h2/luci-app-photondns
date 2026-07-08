@@ -192,11 +192,11 @@ return view.extend({
 			E('div', { class: 'cbi-map-descr' },
 				_('High-performance Rust DNS forwarder with caching and adaptive multi-path failover.')),
 			E('div', { style: 'margin:8px 0; display:flex; gap:8px; align-items:center' }, [
-				toggleBtn,
 				E('span', {
 					style: 'padding:1px 8px; border-radius:8px; color:#fff; background:' +
 						(enabled ? '#2ca02c' : '#6c757d')
 				}, enabled ? _('Service enabled') : _('Service disabled')),
+				toggleBtn,
 				E('button', {
 					class: 'btn cbi-button-apply',
 					click: ui.createHandlerFn(this, 'handleFlushCache')
