@@ -17,6 +17,10 @@ path = "src/bin/photonbench.rs"
 name = "photonrbench"
 path = "src/bin/photonrbench.rs"
 
+[[bin]]
+name = "hotbench"
+path = "src/bin/hotbench.rs"
+
 [dependencies]
 anyhow = "1"
 futures = { version = "0.3", default-features = false, features = ["std"] }
@@ -28,11 +32,22 @@ toml = "0.8"
 log = { version = "0.4", features = ["std"] }
 lru = "0.12"
 fastrand = "2"
+rustc-hash = "2"
+# Optional drop-in allocator. HUGE win on musl (OpenWrt) where the libc malloc is
+# slow and lock-contended under multi-thread load; also helps glibc/macOS. Kept
+# behind a feature so the default cross-compile stays pure-Rust (no C toolchain
+# needed for the target). Enable with: cargo build --release --features fastalloc
+mimalloc = { version = "0.1", default-features = false, optional = true }
 socket2 = { version = "0.5", features = ["all"] }
+libc = "0.2"
 tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12", "logging"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
 rustls-pemfile = "2"
 webpki-roots = "0.26"
+
+[features]
+# Swap in mimalloc as the global allocator. Off by default (adds a C build dep).
+fastalloc = ["dep:mimalloc"]
 
 [profile.release]
 opt-level = 3

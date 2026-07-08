@@ -142,16 +142,10 @@ pub fn parse_query(buf: &[u8]) -> Option<QueryMeta> {
     let qclass = u16_at(buf, after_name + 2)?;
     let question_end = after_name + 4;
 
-    // find EDNS OPT in additional section to learn client's UDP size
-    let mut udp_size = 512u16;
-    if let Some(rrs) = walk_rrs(buf, question_end, qdcount as usize - 1) {
-        for rr in &rrs {
-            if rr.rtype == TYPE_OPT {
-                udp_size = rr.class.max(512);
-                break;
-            }
-        }
-    }
+    // find EDNS OPT in additional section to learn client's UDP size.
+    // Allocation-free inline scan (this runs on every query); walk_rrs would
+    // build a throwaway Vec just to read one field.
+    let udp_size = edns_udp_size(buf, question_end, qdcount as usize - 1);
     Some(QueryMeta {
         id: get_id(buf),
         qname,
@@ -160,6 +154,40 @@ pub fn parse_query(buf: &[u8]) -> Option<QueryMeta> {
         question_end,
         udp_size,
     })
+}
+
+/// Advertised EDNS UDP payload size from the OPT record's CLASS field, or 512
+/// if there is no OPT (or the packet is malformed). Allocation-free: walks RR
+/// headers in place instead of materializing them like `walk_rrs`. On a bad
+/// packet it fails safe to 512 (smaller answers, never oversized ones).
+fn edns_udp_size(buf: &[u8], mut pos: usize, extra_questions: usize) -> u16 {
+    for _ in 0..extra_questions {
+        pos = match skip_name(buf, pos) {
+            Some(p) => p + 4,
+            None => return 512,
+        };
+    }
+    let ancount = match u16_at(buf, 6) { Some(v) => v as usize, None => return 512 };
+    let nscount = match u16_at(buf, 8) { Some(v) => v as usize, None => return 512 };
+    let arcount = match u16_at(buf, 10) { Some(v) => v as usize, None => return 512 };
+    // OPT lives in the additional section: skip the answer + authority RRs first.
+    for _ in 0..(ancount + nscount) {
+        pos = match skip_name(buf, pos) { Some(p) => p, None => return 512 };
+        let rdlen = match u16_at(buf, pos + 8) { Some(v) => v as usize, None => return 512 };
+        pos += 10 + rdlen;
+        if pos > buf.len() { return 512; }
+    }
+    for _ in 0..arcount {
+        pos = match skip_name(buf, pos) { Some(p) => p, None => return 512 };
+        let rtype = match u16_at(buf, pos) { Some(v) => v, None => return 512 };
+        if rtype == TYPE_OPT {
+            return match u16_at(buf, pos + 2) { Some(c) => c.max(512), None => 512 };
+        }
+        let rdlen = match u16_at(buf, pos + 8) { Some(v) => v as usize, None => return 512 };
+        pos += 10 + rdlen;
+        if pos > buf.len() { return 512; }
+    }
+    512
 }
 
 #[derive(Debug)]

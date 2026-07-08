@@ -1,3 +1,11 @@
+// Optional high-performance global allocator (feature = "fastalloc").
+// DNS forwarding allocates several small buffers per query across all worker
+// threads; on musl (OpenWrt) the stock allocator serializes badly under that
+// load, so mimalloc is a large throughput win there.
+#[cfg(feature = "fastalloc")]
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 mod api;
 mod cache;
 mod config;

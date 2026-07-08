@@ -1,0 +1,15 @@
+# large inputs and generated benchmark artifacts — regenerate locally
+queries/
+lists/
+results/
+vendor/
+_t/
+conf/
+*.raw
+*.csv
+*.out
+*.log
+# downloaded / built binaries
+mosdns
+stubdns
+stubdns_hard

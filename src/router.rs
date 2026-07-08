@@ -2,14 +2,19 @@
 //! local-domain -> local group dispatch. Matching is O(#labels) hash lookups.
 
 use crate::config::RoutingCfg;
-use std::collections::{HashMap, HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::net::IpAddr;
 use std::path::Path;
 
+// Domain routing is the hottest hashing on the query path: every forwarded name
+// walks its labels against the china/ad sets (100k+ entries each), doing several
+// lookups per query. FxHash is ~3-5x faster than the default SipHash for these
+// short ASCII keys, and these sets are never exposed to untrusted key flooding
+// in a way that DoS-hardening (SipHash's purpose) would matter for.
 #[derive(Default)]
 pub struct DomainSet {
-    full: HashSet<String>,
-    suffix: HashSet<String>,
+    full: FxHashSet<String>,
+    suffix: FxHashSet<String>,
 }
 
 impl DomainSet {
@@ -95,10 +100,10 @@ const PRIVATE_PTR: &[&str] = &[
 ];
 
 pub struct Router {
-    pub hosts: HashMap<String, Vec<IpAddr>>,
+    pub hosts: FxHashMap<String, Vec<IpAddr>>,
     pub blocked: DomainSet,
     pub local_domains: DomainSet,
-    pub redirects: HashMap<String, String>,
+    pub redirects: FxHashMap<String, String>,
     pub hosts_ttl: u32,
     pub reject_type65: bool,
     special: DomainSet,
@@ -117,7 +122,7 @@ pub enum Decision<'a> {
 
 impl Router {
     pub fn load(cfg: &RoutingCfg) -> Router {
-        let mut hosts: HashMap<String, Vec<IpAddr>> = HashMap::new();
+        let mut hosts: FxHashMap<String, Vec<IpAddr>> = FxHashMap::default();
         if !cfg.hosts_file.is_empty() && Path::new(&cfg.hosts_file).exists() {
             if let Ok(text) = std::fs::read_to_string(&cfg.hosts_file) {
                 for line in text.lines() {
@@ -131,7 +136,7 @@ impl Router {
                 }
             }
         }
-        let mut redirects = HashMap::new();
+        let mut redirects = FxHashMap::default();
         if !cfg.redirect_file.is_empty() && Path::new(&cfg.redirect_file).exists() {
             if let Ok(text) = std::fs::read_to_string(&cfg.redirect_file) {
                 for line in text.lines() {

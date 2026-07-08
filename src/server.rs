@@ -253,13 +253,13 @@ pub async fn handle_query(
                         maybe_refresh(ctx, &entry, &meta, &key);
                     }
                     qlog("cache", "");
-                    return Some(finish(&entry.make_response(query, &meta, now, ctx.cfg.cache.stale_client_ttl), query, &meta, transport));
+                    return Some(finish(entry.make_response(query, &meta, now, ctx.cfg.cache.stale_client_ttl), query, &meta, transport));
                 }
                 Freshness::Stale if ctx.cfg.cache.serve_stale => {
                     stats.stale_served.fetch_add(1, Ordering::Relaxed);
                     maybe_refresh(ctx, &entry, &meta, &key);
                     qlog("stale", "");
-                    return Some(finish(&entry.make_response(query, &meta, now, ctx.cfg.cache.stale_client_ttl), query, &meta, transport));
+                    return Some(finish(entry.make_response(query, &meta, now, ctx.cfg.cache.stale_client_ttl), query, &meta, transport));
                 }
                 Freshness::Stale => {
                     // serve-stale disabled: try upstream, fall back to stale on failure
@@ -267,12 +267,12 @@ pub async fn handle_query(
                     return match resolve_upstream(ctx, query, &meta, &key).await {
                         Ok((resp, group, winner)) => {
                             qlog(&group, &winner);
-                            Some(finish(&resp, query, &meta, transport))
+                            Some(finish(resp, query, &meta, transport))
                         }
                         Err(_) => {
                             stats.stale_served.fetch_add(1, Ordering::Relaxed);
                             qlog("stale", "");
-                            Some(finish(&entry.make_response(query, &meta, now, ctx.cfg.cache.stale_client_ttl), query, &meta, transport))
+                            Some(finish(entry.make_response(query, &meta, now, ctx.cfg.cache.stale_client_ttl), query, &meta, transport))
                         }
                     };
                 }
@@ -285,7 +285,7 @@ pub async fn handle_query(
     match resolve_upstream(ctx, query, &meta, &key).await {
         Ok((resp, group, winner)) => {
             qlog(&group, &winner);
-            Some(finish(&resp, query, &meta, transport))
+            Some(finish(resp, query, &meta, transport))
         }
         Err(e) => {
             log::debug!("resolve {} failed: {}", meta.qname, e);
@@ -407,12 +407,14 @@ pub async fn resolve_named(ctx: &Arc<Ctx>, name: &str, qtype: u16) -> Result<Res
     Ok(mk(&group, &winner, &resp))
 }
 
-/// UDP size guard: replace oversized UDP answers with a TC probe.
-fn finish(resp: &[u8], query: &[u8], meta: &dns::QueryMeta, transport: Transport) -> Vec<u8> {
+/// UDP size guard: replace oversized UDP answers with a TC probe. Takes the
+/// response by value and returns it unchanged in the common case, so the hot
+/// path never copies the whole packet a second time.
+fn finish(resp: Vec<u8>, query: &[u8], meta: &dns::QueryMeta, transport: Transport) -> Vec<u8> {
     if transport == Transport::Udp && resp.len() > meta.udp_size as usize {
         return dns::build_truncated(query, meta.question_end);
     }
-    resp.to_vec()
+    resp
 }
 
 // ------------------------------------------------------------- listeners
@@ -451,8 +453,34 @@ pub async fn run_udp(ctx: Arc<Ctx>, addr: SocketAddr) -> Result<()> {
     for i in 0..n {
         let sock = make_udp_socket(addr, n > 1)
             .with_context(|| format!("bind udp {}", addr))?;
-        let sock = Arc::new(UdpSocket::from_std(sock)?);
-        let ctx = ctx.clone();
+        // Linux only: opt-in recvmmsg/sendmmsg batching via PHOTONDNS_UDP_BATCH=1.
+        // Measured on x86_64 Linux it gives ~no throughput gain (recvmmsg does
+        // batch ~6 datagrams/call, but the client-facing syscalls are only ~30%
+        // of the total — the unbatched upstream forward recvfrom/sendto dominate,
+        // and Linux syscalls are cheap). Kept behind the flag for kernels/NICs
+        // where it may help under overload; DEFAULT is the portable per-packet
+        // loop so the hot path carries no unsafe FFI unless asked for.
+        #[cfg(target_os = "linux")]
+        if std::env::var("PHOTONDNS_UDP_BATCH").as_deref() == Ok("1") {
+            udp_batch::spawn(ctx.clone(), sock);
+        } else {
+            udp_per_packet::spawn(ctx.clone(), Arc::new(UdpSocket::from_std(sock)?));
+        }
+        #[cfg(not(target_os = "linux"))]
+        udp_per_packet::spawn(ctx.clone(), Arc::new(UdpSocket::from_std(sock)?));
+        if i == 0 {
+            log::info!("UDP listening on {} ({} sockets)", addr, n);
+        }
+    }
+    Ok(())
+}
+
+/// Portable one-syscall-per-packet UDP serving (macOS/BSD; also the Linux A/B
+/// baseline via PHOTONDNS_UDP_BATCH=0). Reads a datagram, spawns the pipeline,
+/// sends the answer back.
+mod udp_per_packet {
+    use super::*;
+    pub fn spawn(ctx: Arc<Ctx>, sock: Arc<UdpSocket>) {
         tokio::spawn(async move {
             let mut buf = vec![0u8; 4096];
             loop {
@@ -462,7 +490,9 @@ pub async fn run_udp(ctx: Arc<Ctx>, addr: SocketAddr) -> Result<()> {
                         let ctx = ctx.clone();
                         let sock = sock.clone();
                         tokio::spawn(async move {
-                            if let Some(resp) = handle_query(&ctx, &query, Transport::Udp, peer.ip()).await {
+                            if let Some(resp) =
+                                handle_query(&ctx, &query, Transport::Udp, peer.ip()).await
+                            {
                                 let _ = sock.send_to(&resp, peer).await;
                             }
                         });
@@ -474,11 +504,214 @@ pub async fn run_udp(ctx: Arc<Ctx>, addr: SocketAddr) -> Result<()> {
                 }
             }
         });
-        if i == 0 {
-            log::info!("UDP listening on {} ({} sockets)", addr, n);
+    }
+}
+
+/// Linux batched UDP serving. `recvmmsg` pulls up to BATCH queries in one
+/// syscall; a dedicated sender task coalesces ready answers into `sendmmsg`
+/// batches. Each datagram still flows through `handle_query` unchanged — this
+/// only cuts the two syscalls/query a forwarder pays down toward ~2/batch.
+#[cfg(target_os = "linux")]
+mod udp_batch {
+    use super::*;
+    use std::os::unix::io::AsRawFd;
+    use tokio::io::unix::AsyncFd;
+
+    const BATCH: usize = 32;
+    const BUFSZ: usize = 2048;
+
+    pub fn spawn(ctx: Arc<Ctx>, std_sock: std::net::UdpSocket) {
+        let afd = match AsyncFd::new(std_sock) {
+            Ok(a) => Arc::new(a),
+            Err(e) => {
+                log::error!("udp AsyncFd: {}", e);
+                return;
+            }
+        };
+        // Answers flow to a single sender task per socket, which sendmmsg's them.
+        let (tx, rx) = mpsc::unbounded_channel::<(Vec<u8>, SocketAddr)>();
+        spawn_sender(afd.clone(), rx);
+
+        tokio::spawn(async move {
+            let fd = afd.get_ref().as_raw_fd();
+            let mut rb = RecvBatch::new();
+            loop {
+                let mut guard = match afd.readable().await {
+                    Ok(g) => g,
+                    Err(e) => {
+                        log::error!("udp readable: {}", e);
+                        return;
+                    }
+                };
+                match guard.try_io(|_| rb.recv(fd)) {
+                    Ok(Ok(count)) => {
+                        for i in 0..count {
+                            if let Some((query, peer)) = rb.message(i) {
+                                let ctx = ctx.clone();
+                                let tx = tx.clone();
+                                tokio::spawn(async move {
+                                    if let Some(resp) =
+                                        handle_query(&ctx, &query, Transport::Udp, peer.ip()).await
+                                    {
+                                        let _ = tx.send((resp, peer));
+                                    }
+                                });
+                            }
+                        }
+                    }
+                    Ok(Err(e)) => log::debug!("recvmmsg: {}", e),
+                    Err(_would_block) => {} // readiness cleared by try_io
+                }
+            }
+        });
+    }
+
+    /// Reusable receive scratch. Holds ONLY `Send` data (byte buffers, address
+    /// storage, per-slot lengths) so the receive future stays `Send` for
+    /// `tokio::spawn`. The `iovec`/`mmsghdr` arrays that carry raw pointers are
+    /// built on the stack inside `recv()` and never live across an `.await`.
+    struct RecvBatch {
+        bufs: Vec<[u8; BUFSZ]>,
+        addrs: Vec<libc::sockaddr_storage>,
+        lens: Vec<usize>,
+        namelens: Vec<libc::socklen_t>,
+    }
+
+    impl RecvBatch {
+        fn new() -> Self {
+            RecvBatch {
+                bufs: vec![[0u8; BUFSZ]; BATCH],
+                addrs: vec![unsafe { std::mem::zeroed() }; BATCH],
+                lens: vec![0usize; BATCH],
+                namelens: vec![0; BATCH],
+            }
+        }
+
+        /// One `recvmmsg`. Returns the number of datagrams received (EAGAIN
+        /// surfaces as Err so the caller clears readiness). All libc structs are
+        /// local — nothing pointer-bearing is stored or held across an await.
+        fn recv(&mut self, fd: i32) -> std::io::Result<usize> {
+            let mut iovecs: [libc::iovec; BATCH] = unsafe { std::mem::zeroed() };
+            let mut msgs: [libc::mmsghdr; BATCH] = unsafe { std::mem::zeroed() };
+            let bufp = self.bufs.as_mut_ptr();
+            let addrp = self.addrs.as_mut_ptr();
+            for i in 0..BATCH {
+                unsafe {
+                    iovecs[i].iov_base = (*bufp.add(i)).as_mut_ptr() as *mut libc::c_void;
+                    iovecs[i].iov_len = BUFSZ as _;
+                    let h = &mut msgs[i].msg_hdr;
+                    h.msg_name = addrp.add(i) as *mut libc::c_void;
+                    h.msg_namelen = std::mem::size_of::<libc::sockaddr_storage>() as _;
+                    h.msg_iov = &mut iovecs[i] as *mut libc::iovec;
+                    h.msg_iovlen = 1 as _;
+                }
+            }
+            let n = unsafe {
+                libc::recvmmsg(
+                    fd,
+                    msgs.as_mut_ptr(),
+                    BATCH as _,
+                    libc::MSG_DONTWAIT,
+                    std::ptr::null_mut(),
+                )
+            };
+            if n < 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            let n = n as usize;
+            for i in 0..n {
+                self.lens[i] = msgs[i].msg_len as usize;
+                self.namelens[i] = msgs[i].msg_hdr.msg_namelen;
+            }
+            Ok(n)
+        }
+
+        /// Extract datagram `i`: its bytes (copied, since the handler owns them
+        /// across awaits) and the peer address.
+        fn message(&self, i: usize) -> Option<(Vec<u8>, SocketAddr)> {
+            let len = self.lens[i];
+            if len < dns::HEADER_LEN || len > BUFSZ {
+                return None;
+            }
+            let sa = unsafe { socket2::SockAddr::new(self.addrs[i], self.namelens[i]) };
+            let peer = sa.as_socket()?;
+            Some((self.bufs[i][..len].to_vec(), peer))
         }
     }
-    Ok(())
+
+    /// Drains ready answers and ships them in `sendmmsg` batches.
+    fn spawn_sender(
+        afd: Arc<AsyncFd<std::net::UdpSocket>>,
+        mut rx: mpsc::UnboundedReceiver<(Vec<u8>, SocketAddr)>,
+    ) {
+        tokio::spawn(async move {
+            let fd = afd.get_ref().as_raw_fd();
+            let mut out: Vec<(Vec<u8>, socket2::SockAddr)> = Vec::with_capacity(BATCH);
+            while let Some((buf, peer)) = rx.recv().await {
+                out.push((buf, peer.into()));
+                // opportunistically coalesce whatever else is already queued
+                while out.len() < BATCH {
+                    match rx.try_recv() {
+                        Ok((b, p)) => out.push((b, p.into())),
+                        Err(_) => break,
+                    }
+                }
+                send_all(&afd, fd, &out).await;
+                out.clear();
+            }
+        });
+    }
+
+    /// sendmmsg the whole slice, awaiting writable readiness and handling
+    /// partial sends. The pointer-bearing libc structs are built inside the
+    /// synchronous `sendmmsg_once` (never across an await), so this future stays
+    /// `Send`. Datagrams dropped on a hard error are just lost (UDP).
+    async fn send_all(
+        afd: &AsyncFd<std::net::UdpSocket>,
+        fd: i32,
+        msgs: &[(Vec<u8>, socket2::SockAddr)],
+    ) {
+        let mut sent = 0usize;
+        while sent < msgs.len() {
+            let mut guard = match afd.writable().await {
+                Ok(g) => g,
+                Err(_) => return,
+            };
+            match guard.try_io(|_| sendmmsg_once(fd, &msgs[sent..])) {
+                Ok(Ok(0)) => return,         // no progress; avoid spinning
+                Ok(Ok(k)) => sent += k,
+                Ok(Err(e)) => {
+                    log::debug!("sendmmsg: {}", e);
+                    return; // hard error: give up on the rest
+                }
+                Err(_would_block) => continue, // not writable yet
+            }
+        }
+    }
+
+    /// One `sendmmsg` for up to BATCH datagrams. Fully synchronous: all libc
+    /// structs are stack-local so no raw pointer crosses an await point.
+    fn sendmmsg_once(fd: i32, msgs: &[(Vec<u8>, socket2::SockAddr)]) -> std::io::Result<usize> {
+        let n = msgs.len().min(BATCH);
+        let mut iovecs: [libc::iovec; BATCH] = unsafe { std::mem::zeroed() };
+        let mut mm: [libc::mmsghdr; BATCH] = unsafe { std::mem::zeroed() };
+        for i in 0..n {
+            let (b, sa) = &msgs[i];
+            iovecs[i].iov_base = b.as_ptr() as *mut libc::c_void;
+            iovecs[i].iov_len = b.len() as _;
+            let h = &mut mm[i].msg_hdr;
+            h.msg_name = sa.as_ptr() as *mut libc::c_void;
+            h.msg_namelen = sa.len();
+            h.msg_iov = &mut iovecs[i] as *mut libc::iovec;
+            h.msg_iovlen = 1 as _;
+        }
+        let r = unsafe { libc::sendmmsg(fd, mm.as_mut_ptr(), n as _, 0) };
+        if r < 0 {
+            Err(std::io::Error::last_os_error())
+        } else {
+            Ok(r as usize)
+        }
+    }
 }
 
 pub async fn run_tcp(ctx: Arc<Ctx>, addr: SocketAddr) -> Result<()> {

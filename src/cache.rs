@@ -3,7 +3,7 @@
 use crate::dns;
 use lru::LruCache;
 use parking_lot::Mutex;
-use std::collections::hash_map::DefaultHasher;
+use rustc_hash::{FxBuildHasher, FxHasher};
 use std::hash::{Hash, Hasher};
 use std::num::NonZeroUsize;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
@@ -88,7 +88,7 @@ impl CacheEntry {
 }
 
 struct Shard {
-    map: LruCache<CacheKey, Arc<CacheEntry>>,
+    map: LruCache<CacheKey, Arc<CacheEntry>, FxBuildHasher>,
 }
 
 pub struct DnsCache {
@@ -104,7 +104,10 @@ impl DnsCache {
         let shards = (0..SHARDS)
             .map(|_| {
                 Mutex::new(Shard {
-                    map: LruCache::new(NonZeroUsize::new(per_shard.max(1)).unwrap()),
+                    map: LruCache::with_hasher(
+                        NonZeroUsize::new(per_shard.max(1)).unwrap(),
+                        FxBuildHasher,
+                    ),
                 })
             })
             .collect();
@@ -117,7 +120,7 @@ impl DnsCache {
     }
 
     fn shard(&self, key: &CacheKey) -> &Mutex<Shard> {
-        let mut h = DefaultHasher::new();
+        let mut h = FxHasher::default();
         key.hash(&mut h);
         &self.shards[(h.finish() as usize) % SHARDS]
     }
