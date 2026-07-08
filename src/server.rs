@@ -607,11 +607,13 @@ mod udp_batch {
                 }
             }
             let n = unsafe {
+                // `as _` on the flags: musl types recvmmsg's flags as c_uint,
+                // glibc as c_int, so the constant must adapt to the target.
                 libc::recvmmsg(
                     fd,
                     msgs.as_mut_ptr(),
                     BATCH as _,
-                    libc::MSG_DONTWAIT,
+                    libc::MSG_DONTWAIT as _,
                     std::ptr::null_mut(),
                 )
             };
@@ -701,7 +703,7 @@ mod udp_batch {
             iovecs[i].iov_len = b.len() as _;
             let h = &mut mm[i].msg_hdr;
             h.msg_name = sa.as_ptr() as *mut libc::c_void;
-            h.msg_namelen = sa.len();
+            h.msg_namelen = sa.len() as _;
             h.msg_iov = &mut iovecs[i] as *mut libc::iovec;
             h.msg_iovlen = 1 as _;
         }
