@@ -22,6 +22,8 @@ function index()
 
 	entry({"admin", "services", "photondns", "status"},
 		template("photondns/status"), _("Status"), 5)
+	entry({"admin", "services", "photondns", "checker"},
+		template("photondns/checker"), _("Cache Lookup"), 6)
 	entry({"admin", "services", "photondns", "querylog"},
 		template("photondns/querylog"), _("Query Log"), 7)
 	entry({"admin", "services", "photondns", "basic"},
@@ -40,6 +42,8 @@ function index()
 	entry({"admin", "services", "photondns", "api", "flush"},    call("action_flush")).leaf = true
 	entry({"admin", "services", "photondns", "api", "running"},  call("action_running")).leaf = true
 	entry({"admin", "services", "photondns", "api", "querylog"}, call("action_querylog")).leaf = true
+	entry({"admin", "services", "photondns", "api", "cachekeys"}, call("action_cachekeys")).leaf = true
+	entry({"admin", "services", "photondns", "api", "resolve"},   call("action_resolve")).leaf = true
 	entry({"admin", "services", "photondns", "api", "log"},      call("action_log")).leaf = true
 	entry({"admin", "services", "photondns", "api", "cleanlog"}, call("action_cleanlog")).leaf = true
 	entry({"admin", "services", "photondns", "api", "listupdate"}, call("action_listupdate")).leaf = true
@@ -105,6 +109,39 @@ end
 
 function action_querylog()
 	local raw = api_get("/log?n=500")
+	if raw then
+		write_json({ running = true, raw = raw })
+	else
+		write_json({ running = false, raw = "" })
+	end
+end
+
+-- autocomplete against the cache: q = typed substring, limit = max suggestions.
+-- sanitize to hostname-safe chars because api_get builds a shell curl command.
+function action_cachekeys()
+	local q = luci.http.formvalue("q") or ""
+	local limit = luci.http.formvalue("limit") or "15"
+	q = q:gsub("[^%w%.%-_]", "")
+	limit = limit:gsub("[^%d]", "")
+	if limit == "" then limit = "15" end
+	local raw = api_get("/cachekeys?q=" .. q .. "&limit=" .. limit)
+	if raw then
+		write_json({ running = true, raw = raw })
+	else
+		write_json({ running = false, raw = "" })
+	end
+end
+
+-- full resolve (cache-first, may hit upstream) for a selected/typed name.
+function action_resolve()
+	local name = (luci.http.formvalue("name") or ""):gsub("[^%w%.%-_]", "")
+	local qtype = (luci.http.formvalue("type") or "A"):gsub("[^%w]", "")
+	if name == "" then
+		write_json({ running = false, error = "empty name" })
+		return
+	end
+	if qtype == "" then qtype = "A" end
+	local raw = api_get("/resolve?name=" .. name .. "&type=" .. qtype)
 	if raw then
 		write_json({ running = true, raw = raw })
 	else

@@ -18,6 +18,14 @@
 			"path": "photondns/status"
 		}
 	},
+	"admin/services/photondns/checker": {
+		"title": "Cache Lookup",
+		"order": 6,
+		"action": {
+			"type": "view",
+			"path": "photondns/checker"
+		}
+	},
 	"admin/services/photondns/querylog": {
 		"title": "Query Log",
 		"order": 7,

@@ -1,0 +1,189 @@
+<%+header%>
+
+<h2><%:Cache Lookup%></h2>
+<div class="cbi-map-descr">
+	<%:Type a domain to search what photondns currently has cached. The 15 closest cached records appear as you type; selecting one runs a full resolve and shows the answers, route, TTL and timing.%>
+</div>
+
+<div id="checker_wrap" style="position:relative; margin:10px 0">
+	<input type="text" class="cbi-input-text" id="checker_input" autocomplete="off" spellcheck="false"
+		style="width:100%; max-width:520px"
+		placeholder="<%:Start typing a domain (e.g. github.com)...%>" />
+	<div id="checker_drop" style="display:none; position:absolute; z-index:50; background:var(--background-color-high,#fff); border:1px solid #ccc; border-radius:0 0 4px 4px; max-width:520px; width:100%; box-shadow:0 4px 12px rgba(0,0,0,.15); max-height:360px; overflow:auto"></div>
+</div>
+
+<div id="checker_cachesize" style="font-size:90%; opacity:.6; margin-bottom:14px"></div>
+
+<div id="checker_result"></div>
+
+<script type="text/javascript">//<![CDATA[
+(function() {
+	var searchUrl  = '<%=luci.dispatcher.build_url("admin/services/photondns/api/cachekeys")%>';
+	var resolveUrl = '<%=luci.dispatcher.build_url("admin/services/photondns/api/resolve")%>';
+
+	var ROUTE_COLORS = {
+		cache: '#2ca02c', stale: '#17a2b8', hosts: '#7952b3', lan: '#20c997',
+		blocked: '#d43f3a', redirect: '#6c757d', servfail: '#8b0000',
+		failed: '#8b0000', local: '#e67e22', main: '#0d6efd'
+	};
+
+	var sel = -1;      // currently highlighted suggestion index (-1 = none)
+	var items = [];
+	var timer = null;
+
+	function esc(s) {
+		return String(s == null ? '' : s)
+			.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+	}
+	function routeBadge(route) {
+		var color = ROUTE_COLORS[route] || '#0d6efd';
+		return '<span style="padding:1px 8px; border-radius:8px; color:#fff; font-size:90%; background:' +
+			color + '">' + esc(route || '?') + '</span>';
+	}
+	function parseRaw(res) {
+		if (!res || !res.raw) return null;
+		try { return JSON.parse(res.raw); } catch (e) { return null; }
+	}
+
+	// Render the full resolve result of `name` into the result box.
+	function showResult(name, type) {
+		var box = document.getElementById('checker_result');
+		if (!box) return;
+		box.innerHTML = '<div style="opacity:.6">' +
+			'<%:Resolving%> ' + esc(name) + '...</div>';
+		XHR.get(resolveUrl, { name: name, type: type || 'A' }, function(x, res) {
+			var b = document.getElementById('checker_result');
+			if (!b) return;
+			var d = parseRaw(res);
+			if (!d) {
+				b.innerHTML = '<div class="alert-message warning">' +
+					'<%:No response from photondns (is it running?).%></div>';
+				return;
+			}
+			var html = '<table class="table" style="max-width:640px">';
+			function kv(k, v) {
+				html += '<tr class="tr">' +
+					'<td class="td" style="width:130px; font-weight:bold">' + esc(k) + '</td>' +
+					'<td class="td" style="word-break:break-all">' + v + '</td></tr>';
+			}
+			kv('<%:Name%>', esc(d.name || name));
+			kv('<%:Type%>', esc(d.type || type || 'A'));
+			kv('<%:Route%>', routeBadge(d.route));
+			if (d.error) kv('<%:Error%>', esc(d.error));
+			kv('<%:Response code%>', esc(d.rcode || '-'));
+			var answers;
+			if (d.answers && d.answers.length) {
+				answers = '';
+				for (var i = 0; i < d.answers.length; i++)
+					answers += '<div style="font-family:monospace">' + esc(d.answers[i]) + '</div>';
+			} else {
+				answers = '<span style="opacity:.6"><%:(no address records)%></span>';
+			}
+			kv('<%:Answers%>', answers);
+			if (d.ttl != null) kv('<%:TTL%>', esc(String(d.ttl) + ' s'));
+			if (d.upstream) kv('<%:Upstream%>', esc(d.upstream));
+			if (d.elapsed_ms != null) kv('<%:Elapsed%>', esc(String(d.elapsed_ms) + ' ms'));
+			html += '</table>';
+			b.innerHTML = html;
+		});
+	}
+
+	function highlight() {
+		var drop = document.getElementById('checker_drop');
+		if (!drop) return;
+		for (var i = 0; i < drop.children.length; i++)
+			drop.children[i].style.background = (i === sel) ? '#e8f0fe' : '';
+	}
+
+	// Rebuild the suggestion dropdown from the current items list.
+	function renderSuggestions() {
+		var drop = document.getElementById('checker_drop');
+		if (!drop) return;
+		if (!items.length) { drop.style.display = 'none'; drop.innerHTML = ''; return; }
+		drop.style.display = 'block';
+		drop.innerHTML = '';
+		var makeRow = function(it, i) {
+			var active = (i === sel);
+			var row = document.createElement('div');
+			row.className = 'checker-sugg';
+			row.style.cssText = 'padding:5px 10px; cursor:pointer; display:flex; ' +
+				'justify-content:space-between; gap:12px;' + (active ? 'background:#e8f0fe;' : '');
+			row.innerHTML =
+				'<span style="font-family:monospace; word-break:break-all">' + esc(it.name) + '</span>' +
+				'<span style="opacity:.7; white-space:nowrap">' + esc(it.type) + '&#160;&#160;' +
+				'<span style="color:' + (it.fresh ? '#2ca02c' : '#e67e22') + '">' +
+				(it.fresh ? '<%:fresh%>' : '<%:stale%>') + '</span></span>';
+			row.onclick = function() { choose(i); };
+			row.onmouseover = function() { sel = i; highlight(); };
+			return row;
+		};
+		for (var i = 0; i < items.length; i++)
+			drop.appendChild(makeRow(items[i], i));
+	}
+
+	// Pick suggestion i: fill the input and show its full result.
+	function choose(i) {
+		var it = items[i];
+		if (!it) return;
+		var input = document.getElementById('checker_input');
+		if (input) input.value = it.name;
+		items = [];
+		sel = -1;
+		renderSuggestions();
+		showResult(it.name, it.type);
+	}
+
+	// Debounced query as the user types.
+	function onType(val) {
+		if (timer) { window.clearTimeout(timer); timer = null; }
+		var q = (val || '').replace(/^\s+|\s+$/g, '');
+		timer = window.setTimeout(function() {
+			XHR.get(searchUrl, { q: q, limit: 15 }, function(x, res) {
+				var d = parseRaw(res);
+				items = (d && d.items) ? d.items : [];
+				sel = -1;
+				renderSuggestions();
+				var cs = document.getElementById('checker_cachesize');
+				if (cs && d && d.cache_size != null)
+					cs.textContent = d.cache_size + ' <%:entries cached%>';
+			});
+		}, 120);
+	}
+
+	var input = document.getElementById('checker_input');
+	input.onkeyup = function(ev) {
+		var k = ev.key;
+		if (k === 'ArrowDown' || k === 'ArrowUp' || k === 'Enter' || k === 'Escape')
+			return;
+		onType(ev.target.value);
+	};
+	input.onkeydown = function(ev) {
+		var n = items.length;
+		if (ev.key === 'ArrowDown' && n) {
+			sel = (sel + 1) % n; highlight(); ev.preventDefault();
+		} else if (ev.key === 'ArrowUp' && n) {
+			sel = (sel - 1 + n) % n; highlight(); ev.preventDefault();
+		} else if (ev.key === 'Enter') {
+			ev.preventDefault();
+			if (sel >= 0) {
+				choose(sel);
+			} else {
+				var v = ev.target.value.replace(/^\s+|\s+$/g, '');
+				if (v) { items = []; sel = -1; renderSuggestions(); showResult(v, 'A'); }
+			}
+		} else if (ev.key === 'Escape') {
+			items = []; sel = -1; renderSuggestions();
+		}
+	};
+
+	// hide dropdown on outside click
+	document.addEventListener('click', function(ev) {
+		var wrap = document.getElementById('checker_wrap');
+		if (wrap && !wrap.contains(ev.target)) {
+			items = []; sel = -1; renderSuggestions();
+		}
+	});
+})();
+//]]></script>
+
+<%+footer%>

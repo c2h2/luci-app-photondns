@@ -82,8 +82,18 @@ fn normalize(d: &str) -> String {
 /// and common site-local names). Sending these upstream just produces
 /// timeouts/junk - the exact failure mode that poisons failover stats.
 const SPECIAL_TLDS: &[&str] = &[
-    "local", "localhost", "invalid", "test", "onion", "home.arpa", "internal",
-    "lan", "home", "intranet", "private", "corp",
+    "local",
+    "localhost",
+    "invalid",
+    "test",
+    "onion",
+    "home.arpa",
+    "internal",
+    "lan",
+    "home",
+    "intranet",
+    "private",
+    "corp",
 ];
 
 /// PTR zones of private / link-local address space.
@@ -92,14 +102,27 @@ const PRIVATE_PTR: &[&str] = &[
     "168.192.in-addr.arpa",
     "254.169.in-addr.arpa",
     "127.in-addr.arpa",
-    "16.172.in-addr.arpa", "17.172.in-addr.arpa", "18.172.in-addr.arpa",
-    "19.172.in-addr.arpa", "20.172.in-addr.arpa", "21.172.in-addr.arpa",
-    "22.172.in-addr.arpa", "23.172.in-addr.arpa", "24.172.in-addr.arpa",
-    "25.172.in-addr.arpa", "26.172.in-addr.arpa", "27.172.in-addr.arpa",
-    "28.172.in-addr.arpa", "29.172.in-addr.arpa", "30.172.in-addr.arpa",
+    "16.172.in-addr.arpa",
+    "17.172.in-addr.arpa",
+    "18.172.in-addr.arpa",
+    "19.172.in-addr.arpa",
+    "20.172.in-addr.arpa",
+    "21.172.in-addr.arpa",
+    "22.172.in-addr.arpa",
+    "23.172.in-addr.arpa",
+    "24.172.in-addr.arpa",
+    "25.172.in-addr.arpa",
+    "26.172.in-addr.arpa",
+    "27.172.in-addr.arpa",
+    "28.172.in-addr.arpa",
+    "29.172.in-addr.arpa",
+    "30.172.in-addr.arpa",
     "31.172.in-addr.arpa",
     "d.f.ip6.arpa",
-    "8.e.f.ip6.arpa", "9.e.f.ip6.arpa", "a.e.f.ip6.arpa", "b.e.f.ip6.arpa",
+    "8.e.f.ip6.arpa",
+    "9.e.f.ip6.arpa",
+    "a.e.f.ip6.arpa",
+    "b.e.f.ip6.arpa",
 ];
 
 pub struct Router {
@@ -197,7 +220,11 @@ impl Router {
         }
         let lan = if lan_cfg.enabled {
             let h = LanHosts::load(lan_cfg);
-            log::info!("router: {} lan hosts (suffix '{}')", h.len(), lan_cfg.suffix);
+            log::info!(
+                "router: {} lan hosts (suffix '{}')",
+                h.len(),
+                lan_cfg.suffix
+            );
             Some(LanState {
                 hosts: ArcSwap::from_pointee(h),
                 cfg: lan_cfg.clone(),
@@ -265,8 +292,7 @@ impl Router {
         if self.reject_type65 && qtype == crate::dns::TYPE_HTTPS {
             return Decision::Block;
         }
-        if (qtype == crate::dns::TYPE_A || qtype == crate::dns::TYPE_AAAA)
-            && !self.hosts.is_empty()
+        if (qtype == crate::dns::TYPE_A || qtype == crate::dns::TYPE_AAAA) && !self.hosts.is_empty()
         {
             if let Some(ips) = self.hosts.get(qname) {
                 return Decision::Hosts(ips);

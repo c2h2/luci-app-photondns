@@ -187,7 +187,13 @@ fn report(name: &str, count: usize, elapsed: Duration, phase: &Phase) {
     };
     println!(
         "  {:<5} {:>6} queries in {:>6.3}s  {:>8.0} qps   ok {} err {} servfail {}",
-        name, count, secs, ok as f64 / secs, ok, err, sf
+        name,
+        count,
+        secs,
+        ok as f64 / secs,
+        ok,
+        err,
+        sf
     );
     println!(
         "        latency ms:  min {:.2}  p50 {:.2}  p90 {:.2}  p99 {:.2}  max {:.2}  mean {:.2}",
@@ -216,12 +222,15 @@ fn main() {
     let concurrency: usize = args.get(3).and_then(|s| s.parse().ok()).unwrap_or(50);
     let suffix = std::env::var("SUFFIX").ok().filter(|s| !s.is_empty());
     let warm = std::env::var("WARM").map(|v| v != "0").unwrap_or(true);
-    let seed = std::env::var("SEED").ok().and_then(|s| s.parse().ok()).unwrap_or_else(|| {
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos() as u64
-    });
+    let seed = std::env::var("SEED")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or_else(|| {
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos() as u64
+        });
 
     let domains = gen_domains(count, seed, &suffix);
     println!(
@@ -232,20 +241,42 @@ fn main() {
         suffix.as_deref().unwrap_or("com"),
         seed
     );
-    println!("  sample: {}  {}  {}", domains[0], domains[count / 2], domains[count - 1]);
+    println!(
+        "  sample: {}  {}  {}",
+        domains[0],
+        domains[count / 2],
+        domains[count - 1]
+    );
 
     let cold = Arc::new(Phase::new(count));
-    let e1 = run_phase(&server, &domains, concurrency, Duration::from_secs(3), &cold);
+    let e1 = run_phase(
+        &server,
+        &domains,
+        concurrency,
+        Duration::from_secs(3),
+        &cold,
+    );
     report("cold", count, e1, &cold);
 
     if warm {
         let warm_p = Arc::new(Phase::new(count));
-        let e2 = run_phase(&server, &domains, concurrency, Duration::from_secs(3), &warm_p);
+        let e2 = run_phase(
+            &server,
+            &domains,
+            concurrency,
+            Duration::from_secs(3),
+            &warm_p,
+        );
         report("warm", count, e2, &warm_p);
 
         let c = cold.lat_us.lock().unwrap().len();
         let cold_mean = if c > 0 {
-            cold.lat_us.lock().unwrap().iter().map(|&x| x as u64).sum::<u64>() as f64
+            cold.lat_us
+                .lock()
+                .unwrap()
+                .iter()
+                .map(|&x| x as u64)
+                .sum::<u64>() as f64
                 / c as f64
                 / 1000.0
         } else {

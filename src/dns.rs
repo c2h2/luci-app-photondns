@@ -168,25 +168,56 @@ fn edns_udp_size(buf: &[u8], mut pos: usize, extra_questions: usize) -> u16 {
             None => return 512,
         };
     }
-    let ancount = match u16_at(buf, 6) { Some(v) => v as usize, None => return 512 };
-    let nscount = match u16_at(buf, 8) { Some(v) => v as usize, None => return 512 };
-    let arcount = match u16_at(buf, 10) { Some(v) => v as usize, None => return 512 };
+    let ancount = match u16_at(buf, 6) {
+        Some(v) => v as usize,
+        None => return 512,
+    };
+    let nscount = match u16_at(buf, 8) {
+        Some(v) => v as usize,
+        None => return 512,
+    };
+    let arcount = match u16_at(buf, 10) {
+        Some(v) => v as usize,
+        None => return 512,
+    };
     // OPT lives in the additional section: skip the answer + authority RRs first.
     for _ in 0..(ancount + nscount) {
-        pos = match skip_name(buf, pos) { Some(p) => p, None => return 512 };
-        let rdlen = match u16_at(buf, pos + 8) { Some(v) => v as usize, None => return 512 };
+        pos = match skip_name(buf, pos) {
+            Some(p) => p,
+            None => return 512,
+        };
+        let rdlen = match u16_at(buf, pos + 8) {
+            Some(v) => v as usize,
+            None => return 512,
+        };
         pos += 10 + rdlen;
-        if pos > buf.len() { return 512; }
+        if pos > buf.len() {
+            return 512;
+        }
     }
     for _ in 0..arcount {
-        pos = match skip_name(buf, pos) { Some(p) => p, None => return 512 };
-        let rtype = match u16_at(buf, pos) { Some(v) => v, None => return 512 };
+        pos = match skip_name(buf, pos) {
+            Some(p) => p,
+            None => return 512,
+        };
+        let rtype = match u16_at(buf, pos) {
+            Some(v) => v,
+            None => return 512,
+        };
         if rtype == TYPE_OPT {
-            return match u16_at(buf, pos + 2) { Some(c) => c.max(512), None => 512 };
+            return match u16_at(buf, pos + 2) {
+                Some(c) => c.max(512),
+                None => 512,
+            };
         }
-        let rdlen = match u16_at(buf, pos + 8) { Some(v) => v as usize, None => return 512 };
+        let rdlen = match u16_at(buf, pos + 8) {
+            Some(v) => v as usize,
+            None => return 512,
+        };
         pos += 10 + rdlen;
-        if pos > buf.len() { return 512; }
+        if pos > buf.len() {
+            return 512;
+        }
     }
     512
 }

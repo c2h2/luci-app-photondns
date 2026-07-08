@@ -110,11 +110,17 @@ fn main() {
         .collect();
     println!(
         "hotbench: {} names x {} iters vs {}",
-        names.len(), iters, list
+        names.len(),
+        iters,
+        list
     );
 
     println!("router domain-set matching (the hottest per-query CPU work):");
     let sip = run::<std::collections::hash_map::RandomState>("SipHash", list, &names, iters);
     let fx = run::<rustc_hash::FxBuildHasher>("FxHash", list, &names, iters);
-    println!("  => FxHash speedup: {:.2}x  ({:.0}% less CPU per match)", sip / fx, (1.0 - fx / sip) * 100.0);
+    println!(
+        "  => FxHash speedup: {:.2}x  ({:.0}% less CPU per match)",
+        sip / fx,
+        (1.0 - fx / sip) * 100.0
+    );
 }

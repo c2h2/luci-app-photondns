@@ -79,6 +79,29 @@ fn parse_qtype(s: &str) -> Option<u16> {
     })
 }
 
+/// Numeric qtype -> its token ("A", "AAAA", "TYPE65" for unknown).
+fn qtype_name(t: u16) -> String {
+    match t {
+        1 => "A",
+        2 => "NS",
+        5 => "CNAME",
+        6 => "SOA",
+        12 => "PTR",
+        15 => "MX",
+        16 => "TXT",
+        28 => "AAAA",
+        33 => "SRV",
+        43 => "DS",
+        48 => "DNSKEY",
+        64 => "SVCB",
+        65 => "HTTPS",
+        255 => "ANY",
+        257 => "CAA",
+        _ => return format!("TYPE{}", t),
+    }
+    .to_string()
+}
+
 /// Build an HTTP/1.1 JSON response. Includes a permissive CORS header so the
 /// bundled test page works when opened directly from disk (file:// origin).
 fn http_json(status: &str, body: &str) -> String {
@@ -182,11 +205,9 @@ pub async fn run(ctx: Arc<Ctx>, listen: String) -> Result<()> {
             let ctx = ctx.clone();
             tokio::spawn(async move {
                 let mut buf = vec![0u8; 2048];
-                let Ok(Ok(n)) = tokio::time::timeout(
-                    std::time::Duration::from_secs(5),
-                    stream.read(&mut buf),
-                )
-                .await
+                let Ok(Ok(n)) =
+                    tokio::time::timeout(std::time::Duration::from_secs(5), stream.read(&mut buf))
+                        .await
                 else {
                     return;
                 };
@@ -196,12 +217,51 @@ pub async fn run(ctx: Arc<Ctx>, listen: String) -> Result<()> {
                     let n = path
                         .split_once("n=")
                         .and_then(|(_, v)| {
-                            v.split(&['&', ' '][..]).next().and_then(|x| x.parse::<usize>().ok())
+                            v.split(&['&', ' '][..])
+                                .next()
+                                .and_then(|x| x.parse::<usize>().ok())
                         })
                         .unwrap_or(500)
                         .min(5000);
                     let body = json!({ "entries": ctx.qlog.snapshot(n) }).to_string();
-                    let _ = stream.write_all(http_json("200 OK", &body).as_bytes()).await;
+                    let _ = stream
+                        .write_all(http_json("200 OK", &body).as_bytes())
+                        .await;
+                    return;
+                }
+
+                // GET /cachekeys?q=<needle>&limit=<n>  -> autocomplete against
+                // the cache: up to `limit` cached names matching `q`, closest
+                // first, each with its record type and fresh/stale flag.
+                if path.starts_with("/cachekeys?") || path == "/cachekeys" {
+                    let needle = query_param(path, "q").unwrap_or_default();
+                    let limit = query_param(path, "limit")
+                        .and_then(|v| v.parse::<usize>().ok())
+                        .unwrap_or(15)
+                        .clamp(1, 100);
+                    let matches = ctx
+                        .cache
+                        .as_ref()
+                        .map(|c| c.search(&needle, limit))
+                        .unwrap_or_default();
+                    let items: Vec<_> = matches
+                        .into_iter()
+                        .map(|(name, qtype, fresh)| {
+                            json!({
+                                "name": name,
+                                "type": qtype_name(qtype),
+                                "fresh": fresh,
+                            })
+                        })
+                        .collect();
+                    let body = json!({
+                        "items": items,
+                        "cache_size": ctx.cache.as_ref().map(|c| c.len()).unwrap_or(0),
+                    })
+                    .to_string();
+                    let _ = stream
+                        .write_all(http_json("200 OK", &body).as_bytes())
+                        .await;
                     return;
                 }
 
@@ -236,7 +296,9 @@ pub async fn run(ctx: Arc<Ctx>, listen: String) -> Result<()> {
                     } else {
                         json!({"error": format!("unknown type '{}'", qt)}).to_string()
                     };
-                    let _ = stream.write_all(http_json("200 OK", &body).as_bytes()).await;
+                    let _ = stream
+                        .write_all(http_json("200 OK", &body).as_bytes())
+                        .await;
                     return;
                 }
                 let (status, body) = match path {
@@ -254,7 +316,10 @@ pub async fn run(ctx: Arc<Ctx>, listen: String) -> Result<()> {
                         } else {
                             0
                         };
-                        ("200 OK", json!({"success": true, "flushed": flushed}).to_string())
+                        (
+                            "200 OK",
+                            json!({"success": true, "flushed": flushed}).to_string(),
+                        )
                     }
                     _ => ("404 Not Found", json!({"error": "not found"}).to_string()),
                 };

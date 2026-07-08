@@ -187,6 +187,51 @@ const methods = {
 		}
 	},
 
+	// Autocomplete against the cache: q = typed prefix, limit = max results.
+	// Returns the daemon's /cachekeys JSON raw for the client to parse.
+	cache_search: {
+		args: { q: '', limit: 15 },
+		call: function(req) {
+			try {
+				let q = (req.args ? req.args.q : '') || '';
+				let limit = (req.args ? req.args.limit : 15) || 15;
+				// keep only chars valid in a hostname query to avoid shell/URL issues
+				q = replace(q, /[^A-Za-z0-9._-]/g, '');
+				let res = api_get(`/cachekeys?q=${q}&limit=${limit}`);
+				if (res.code === 0 && length(res.stdout) > 0) {
+					return { running: true, raw: res.stdout };
+				}
+				return { running: false, raw: "" };
+			} catch (e) {
+				return { running: false, error: String(e) };
+			}
+		}
+	},
+
+	// Full resolve for a selected name (cache-first, may hit upstream).
+	// name = domain, type = A/AAAA/... Returns the daemon's /resolve JSON raw.
+	resolve: {
+		args: { name: '', type: 'A' },
+		call: function(req) {
+			try {
+				let name = (req.args ? req.args.name : '') || '';
+				let qtype = (req.args ? req.args.type : 'A') || 'A';
+				name = replace(name, /[^A-Za-z0-9._-]/g, '');
+				qtype = replace(qtype, /[^A-Za-z0-9]/g, '');
+				if (length(name) == 0) {
+					return { running: false, error: 'empty name' };
+				}
+				let res = api_get(`/resolve?name=${name}&type=${qtype}`);
+				if (res.code === 0 && length(res.stdout) > 0) {
+					return { running: true, raw: res.stdout };
+				}
+				return { running: false, raw: "" };
+			} catch (e) {
+				return { running: false, error: String(e) };
+			}
+		}
+	},
+
 	clean_log: {
 		call: function() {
 			try {

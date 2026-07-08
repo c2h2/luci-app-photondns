@@ -77,7 +77,11 @@ pub async fn run(ctx: Arc<Ctx>) -> Result<()> {
         if tls.is_some() { "https" } else { "http" },
         addr,
         ctx.cfg.server.doh_path,
-        if tls.is_some() { "" } else { " (put a TLS reverse proxy in front for browsers)" }
+        if tls.is_some() {
+            ""
+        } else {
+            " (put a TLS reverse proxy in front for browsers)"
+        }
     );
     tokio::spawn(async move {
         loop {
@@ -191,7 +195,12 @@ async fn serve_conn<S: AsyncRead + AsyncWrite + Unpin>(ctx: Arc<Ctx>, mut s: S, 
     }
 }
 
-async fn respond<S: AsyncWrite + Unpin>(s: &mut S, code: u16, body: &[u8], keep: bool) -> std::io::Result<()> {
+async fn respond<S: AsyncWrite + Unpin>(
+    s: &mut S,
+    code: u16,
+    body: &[u8],
+    keep: bool,
+) -> std::io::Result<()> {
     let status = match code {
         200 => "200 OK",
         400 => "400 Bad Request",

@@ -164,6 +164,50 @@ impl DnsCache {
         self.shards.iter().map(|s| s.lock().map.len()).sum()
     }
 
+    /// Search cached keys for an autocomplete box. Returns up to `limit`
+    /// distinct entries whose qname contains `needle` (lowercased substring),
+    /// each as `(qname, qtype, fresh)`. Ranked "closest first": exact name,
+    /// then prefix match, then earliest substring position, then shorter name.
+    /// `needle` empty returns the most-recently-touched entries (LRU order).
+    pub fn search(&self, needle: &str, limit: usize) -> Vec<(String, u16, bool)> {
+        let needle = needle.trim().trim_end_matches('.').to_ascii_lowercase();
+        let now = Instant::now();
+        // (rank, name, qtype, fresh)
+        let mut hits: Vec<(u32, String, u16, bool)> = Vec::new();
+        for s in &self.shards {
+            let shard = s.lock();
+            for (k, v) in shard.map.iter() {
+                // key = "qname\0qtype\0qclass"
+                let mut it = k.split('\u{0}');
+                let name = it.next().unwrap_or("");
+                let qtype: u16 = it.next().and_then(|x| x.parse().ok()).unwrap_or(0);
+                let pos = if needle.is_empty() {
+                    Some(0)
+                } else {
+                    name.find(&needle)
+                };
+                let Some(pos) = pos else { continue };
+                let fresh = matches!(v.freshness(now), Some(Freshness::Fresh { .. }));
+                // lower rank = closer match
+                let rank = if name == needle {
+                    0
+                } else if pos == 0 {
+                    1 + name.len() as u32
+                } else {
+                    10_000 + pos as u32 * 100 + name.len() as u32
+                };
+                hits.push((rank, name.to_string(), qtype, fresh));
+            }
+        }
+        hits.sort_by(|a, b| {
+            a.0.cmp(&b.0)
+                .then_with(|| a.1.cmp(&b.1))
+                .then(a.2.cmp(&b.2))
+        });
+        hits.truncate(limit);
+        hits.into_iter().map(|(_, n, t, f)| (n, t, f)).collect()
+    }
+
     /// Persist non-expired entries. Format:
     /// magic "PHOTONDC" u8 version, u64 count, then per entry:
     /// u16 key_len, key, u64 stored_unix, u32 ttl, u32 stale_ttl,
@@ -262,7 +306,9 @@ impl DnsCache {
                 data: bytes,
                 ttl_offsets: offsets.into_boxed_slice(),
                 question_len,
-                stored_at: now.checked_sub(Duration::from_secs(age as u64)).unwrap_or(now),
+                stored_at: now
+                    .checked_sub(Duration::from_secs(age as u64))
+                    .unwrap_or(now),
                 ttl,
                 stale_ttl,
                 hits: AtomicU32::new(0),
@@ -393,6 +439,35 @@ mod tests {
         assert_eq!(loaded, 5);
         assert_eq!(cache2.len(), 5);
         std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn search_ranks_and_limits() {
+        let cache = DnsCache::new(100);
+        for n in [
+            "www.example.com",
+            "mail.example.com",
+            "example.com",
+            "test.org",
+        ] {
+            let (k, e) = entry_for(n, 300, 0);
+            cache.insert(k, e);
+        }
+        // exact name ranks first, then prefix, then substring
+        let r = cache.search("example", 10);
+        let names: Vec<&str> = r.iter().map(|(n, _, _)| n.as_str()).collect();
+        assert_eq!(names[0], "example.com"); // exact
+        assert!(names.contains(&"www.example.com"));
+        assert!(!names.contains(&"test.org")); // no match
+                                               // type + fresh reported
+        assert_eq!(r[0].1, dns::TYPE_A);
+        assert!(r[0].2); // fresh
+                         // limit is honored
+        assert_eq!(cache.search("example", 2).len(), 2);
+        // empty needle returns entries (up to limit)
+        assert_eq!(cache.search("", 3).len(), 3);
+        // trailing dot + case are normalized
+        assert_eq!(cache.search("EXAMPLE.COM.", 10)[0].0, "example.com");
     }
 
     #[test]

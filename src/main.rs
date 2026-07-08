@@ -27,7 +27,10 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 
 fn usage() -> ! {
-    eprintln!("photondns {} - high-performance DNS forwarder", env!("PHOTONDNS_VERSION"));
+    eprintln!(
+        "photondns {} - high-performance DNS forwarder",
+        env!("PHOTONDNS_VERSION")
+    );
     eprintln!("usage: photondns [-c /etc/photondns/config.toml] [-t] [-V]");
     eprintln!("  -c <file>  config file (TOML)");
     eprintln!("  -t         test configuration and exit");
@@ -91,12 +94,21 @@ async fn run(cfg: config::Config) -> Result<()> {
             "group '{}': strategy={:?} upstreams={:?} backups={:?}",
             g.name,
             g.strategy,
-            g.upstreams.iter().map(|u| u.addr_str.as_str()).collect::<Vec<_>>(),
-            g.backups.iter().map(|u| u.addr_str.as_str()).collect::<Vec<_>>()
+            g.upstreams
+                .iter()
+                .map(|u| u.addr_str.as_str())
+                .collect::<Vec<_>>(),
+            g.backups
+                .iter()
+                .map(|u| u.addr_str.as_str())
+                .collect::<Vec<_>>()
         );
     }
 
-    let cache = cfg.cache.enabled.then(|| Arc::new(cache::DnsCache::new(cfg.cache.size)));
+    let cache = cfg
+        .cache
+        .enabled
+        .then(|| Arc::new(cache::DnsCache::new(cfg.cache.size)));
     if let (Some(c), path) = (&cache, cfg.cache.dump_file.clone()) {
         if !path.is_empty() {
             match c.load(&path) {

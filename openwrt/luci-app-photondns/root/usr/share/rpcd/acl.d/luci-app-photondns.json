@@ -22,6 +22,8 @@
 					"update_adlist",
 					"adlist_status",
 					"query_log",
+					"cache_search",
+					"resolve",
 					"service_state"
 				]
 			},

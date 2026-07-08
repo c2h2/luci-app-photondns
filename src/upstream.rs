@@ -46,7 +46,7 @@ pub struct Upstream {
     pub state: UpstreamState,
     resolved: RwLock<Option<SocketAddr>>,
     udp: Option<UdpTransport>,
-    pipe: Option<PipePool>,     // tcp / dot; also TC-fallback for udp
+    pipe: Option<PipePool>, // tcp / dot; also TC-fallback for udp
     doh: Option<DohPool>,
 }
 
@@ -152,7 +152,12 @@ impl rustls::client::danger::ServerCertVerifier for NoVerify {
 }
 
 impl Upstream {
-    pub fn new(addr: &str, insecure: bool, idle_timeout: u64, bootstrap: SocketAddr) -> Result<Arc<Self>> {
+    pub fn new(
+        addr: &str,
+        insecure: bool,
+        idle_timeout: u64,
+        bootstrap: SocketAddr,
+    ) -> Result<Arc<Self>> {
         let (scheme, host, port, path) = parse_addr(addr)?;
         let ip: Option<IpAddr> = host.parse().ok();
         let sni = host.clone();
@@ -284,7 +289,12 @@ impl Upstream {
 
 /// Resolve a hostname via the bootstrap plain-DNS server (A, then AAAA).
 async fn bootstrap_resolve(host: &str, bootstrap: SocketAddr) -> Result<IpAddr> {
-    let sock = UdpSocket::bind(if bootstrap.is_ipv4() { "0.0.0.0:0" } else { "[::]:0" }).await?;
+    let sock = UdpSocket::bind(if bootstrap.is_ipv4() {
+        "0.0.0.0:0"
+    } else {
+        "[::]:0"
+    })
+    .await?;
     for qtype in [dns::TYPE_A, dns::TYPE_AAAA] {
         let q = dns::build_query(host, qtype, 1).ok_or_else(|| anyhow!("bad name"))?;
         for _ in 0..2 {
@@ -590,8 +600,8 @@ impl DohPool {
     async fn dial(&self, target: SocketAddr) -> Result<Box<dyn Io>> {
         let tcp = TcpStream::connect(target).await?;
         tcp.set_nodelay(true).ok();
-        let name =
-            ServerName::try_from(self.sni.clone()).map_err(|_| anyhow!("bad SNI '{}'", self.sni))?;
+        let name = ServerName::try_from(self.sni.clone())
+            .map_err(|_| anyhow!("bad SNI '{}'", self.sni))?;
         Ok(Box::new(self.connector.connect(name, tcp).await?))
     }
 
@@ -761,7 +771,10 @@ mod tests {
 
         let (s, h, p, path) = parse_addr("https://dns.alidns.com/dns-query").unwrap();
         assert!(matches!(s, Scheme::Https));
-        assert_eq!((h.as_str(), p, path.as_str()), ("dns.alidns.com", 443, "/dns-query"));
+        assert_eq!(
+            (h.as_str(), p, path.as_str()),
+            ("dns.alidns.com", 443, "/dns-query")
+        );
 
         let (s, h, p, _) = parse_addr("tcp://[2001:4860:4860::8888]:53").unwrap();
         assert!(matches!(s, Scheme::Tcp));

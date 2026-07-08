@@ -5,9 +5,9 @@ use crate::cache::{self, CacheEntry, DnsCache, Freshness};
 use crate::config::Config;
 use crate::dns;
 use crate::group::Group;
+use crate::qlog::QueryLog;
 use crate::router::{Decision, LanAnswer, Router};
 use crate::stats::Stats;
-use crate::qlog::QueryLog;
 use anyhow::{Context, Result};
 use std::net::{IpAddr, SocketAddr};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
@@ -68,8 +68,15 @@ fn unix_now() -> u64 {
 /// Clamp TTLs, extract cache metadata and store the response.
 /// Returns false when the response is not cacheable (nothing was stored).
 fn cache_store(ctx: &Ctx, key: cache::CacheKey, resp: &mut Vec<u8>, question_end: usize) -> bool {
-    let Some(cache) = &ctx.cache else { return false };
-    dns::clamp_ttls(resp, question_end, ctx.cfg.cache.min_ttl, ctx.cfg.cache.max_ttl);
+    let Some(cache) = &ctx.cache else {
+        return false;
+    };
+    dns::clamp_ttls(
+        resp,
+        question_end,
+        ctx.cfg.cache.min_ttl,
+        ctx.cfg.cache.max_ttl,
+    );
     let Some(info) = dns::cache_info(resp, question_end, ctx.cfg.cache.negative_ttl) else {
         return false;
     };
@@ -192,8 +199,14 @@ pub async fn handle_query(
     };
 
     let qlog = |route: &str, upstream: &str| {
-        ctx.qlog
-            .record(client, &meta.qname, meta.qtype, route, upstream, start.elapsed());
+        ctx.qlog.record(
+            client,
+            &meta.qname,
+            meta.qtype,
+            route,
+            upstream,
+            start.elapsed(),
+        );
     };
 
     // routing decisions that answer locally
@@ -216,7 +229,11 @@ pub async fn handle_query(
         Decision::Block => {
             stats.blocked.fetch_add(1, Ordering::Relaxed);
             qlog("blocked", "");
-            return Some(dns::build_reply(query, meta.question_end, dns::RCODE_NXDOMAIN));
+            return Some(dns::build_reply(
+                query,
+                meta.question_end,
+                dns::RCODE_NXDOMAIN,
+            ));
         }
         Decision::Redirect(target) => {
             stats.redirected.fetch_add(1, Ordering::Relaxed);
@@ -241,7 +258,11 @@ pub async fn handle_query(
         if suppress {
             stats.blocked.fetch_add(1, Ordering::Relaxed);
             qlog("aaaa-blocked", "");
-            return Some(dns::build_reply(query, meta.question_end, dns::RCODE_NOERROR));
+            return Some(dns::build_reply(
+                query,
+                meta.question_end,
+                dns::RCODE_NOERROR,
+            ));
         }
     }
 
@@ -262,13 +283,23 @@ pub async fn handle_query(
                         maybe_refresh(ctx, &entry, &meta, &key);
                     }
                     qlog("cache", "");
-                    return Some(finish(entry.make_response(query, &meta, now, ctx.cfg.cache.stale_client_ttl), query, &meta, transport));
+                    return Some(finish(
+                        entry.make_response(query, &meta, now, ctx.cfg.cache.stale_client_ttl),
+                        query,
+                        &meta,
+                        transport,
+                    ));
                 }
                 Freshness::Stale if ctx.cfg.cache.serve_stale => {
                     stats.stale_served.fetch_add(1, Ordering::Relaxed);
                     maybe_refresh(ctx, &entry, &meta, &key);
                     qlog("stale", "");
-                    return Some(finish(entry.make_response(query, &meta, now, ctx.cfg.cache.stale_client_ttl), query, &meta, transport));
+                    return Some(finish(
+                        entry.make_response(query, &meta, now, ctx.cfg.cache.stale_client_ttl),
+                        query,
+                        &meta,
+                        transport,
+                    ));
                 }
                 Freshness::Stale => {
                     // serve-stale disabled: try upstream, fall back to stale on failure
@@ -281,7 +312,17 @@ pub async fn handle_query(
                         Err(_) => {
                             stats.stale_served.fetch_add(1, Ordering::Relaxed);
                             qlog("stale", "");
-                            Some(finish(entry.make_response(query, &meta, now, ctx.cfg.cache.stale_client_ttl), query, &meta, transport))
+                            Some(finish(
+                                entry.make_response(
+                                    query,
+                                    &meta,
+                                    now,
+                                    ctx.cfg.cache.stale_client_ttl,
+                                ),
+                                query,
+                                &meta,
+                                transport,
+                            ))
                         }
                     };
                 }
@@ -301,7 +342,11 @@ pub async fn handle_query(
             ctx.stats.upstream_errors.fetch_add(1, Ordering::Relaxed);
             ctx.stats.servfail.fetch_add(1, Ordering::Relaxed);
             qlog("servfail", "");
-            Some(dns::build_reply(query, meta.question_end, dns::RCODE_SERVFAIL))
+            Some(dns::build_reply(
+                query,
+                meta.question_end,
+                dns::RCODE_SERVFAIL,
+            ))
         }
     }
 }
@@ -459,7 +504,10 @@ pub async fn run_udp(ctx: Arc<Ctx>, addr: SocketAddr) -> Result<()> {
     let n = match ctx.cfg.server.udp_sockets {
         0 => {
             if cfg!(target_os = "linux") {
-                std::thread::available_parallelism().map(|p| p.get()).unwrap_or(2).min(4)
+                std::thread::available_parallelism()
+                    .map(|p| p.get())
+                    .unwrap_or(2)
+                    .min(4)
             } else {
                 1
             }
@@ -467,8 +515,7 @@ pub async fn run_udp(ctx: Arc<Ctx>, addr: SocketAddr) -> Result<()> {
         n => n.min(16),
     };
     for i in 0..n {
-        let sock = make_udp_socket(addr, n > 1)
-            .with_context(|| format!("bind udp {}", addr))?;
+        let sock = make_udp_socket(addr, n > 1).with_context(|| format!("bind udp {}", addr))?;
         // Linux only: opt-in recvmmsg/sendmmsg batching via PHOTONDNS_UDP_BATCH=1.
         // Measured on x86_64 Linux it gives ~no throughput gain (recvmmsg does
         // batch ~6 datagrams/call, but the client-facing syscalls are only ~30%
@@ -696,7 +743,7 @@ mod udp_batch {
                 Err(_) => return,
             };
             match guard.try_io(|_| sendmmsg_once(fd, &msgs[sent..])) {
-                Ok(Ok(0)) => return,         // no progress; avoid spinning
+                Ok(Ok(0)) => return, // no progress; avoid spinning
                 Ok(Ok(k)) => sent += k,
                 Ok(Err(e)) => {
                     log::debug!("sendmmsg: {}", e);
@@ -767,7 +814,9 @@ pub async fn run_tcp(ctx: Arc<Ctx>, addr: SocketAddr) -> Result<()> {
                     let ctx = ctx.clone();
                     let wr = wr.clone();
                     tokio::spawn(async move {
-                        if let Some(resp) = handle_query(&ctx, &qbuf, Transport::Tcp, peer.ip()).await {
+                        if let Some(resp) =
+                            handle_query(&ctx, &qbuf, Transport::Tcp, peer.ip()).await
+                        {
                             let mut frame = Vec::with_capacity(resp.len() + 2);
                             frame.extend_from_slice(&(resp.len() as u16).to_be_bytes());
                             frame.extend_from_slice(&resp);
@@ -797,7 +846,8 @@ pub fn spawn_refresher(ctx: Arc<Ctx>, mut rx: mpsc::Receiver<RefreshJob>) {
                         // find question_end of the *response*
                         match dns::parse_query(&resp) {
                             Some(rmeta) if rmeta.qname == job.qname => {
-                                if cache_store(&ctx, job.key.clone(), &mut resp, rmeta.question_end) {
+                                if cache_store(&ctx, job.key.clone(), &mut resp, rmeta.question_end)
+                                {
                                     log::debug!("refreshed {}", job.qname);
                                 } else {
                                     // upstream answered but the response is not
