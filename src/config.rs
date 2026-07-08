@@ -17,6 +17,8 @@ pub struct Config {
     pub routing: RoutingCfg,
     #[serde(default)]
     pub prewarm: PrewarmCfg,
+    #[serde(default)]
+    pub lan: LanCfg,
     /// upstream groups; group "main" is the default route target
     #[serde(default, rename = "group")]
     pub groups: Vec<GroupCfg>,
@@ -34,6 +36,29 @@ pub struct PrewarmCfg {
     /// prewarm once at startup.
     #[serde(default = "default_prewarm_interval")]
     pub interval: u64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LanCfg {
+    /// resolve LAN client names (from DHCP leases + an extra-hosts file)
+    #[serde(default)]
+    pub enabled: bool,
+    /// dnsmasq DHCP lease file to learn `name -> ip` from; re-read each refresh
+    #[serde(default = "default_leases_file")]
+    pub leases_file: String,
+    /// static `name ip [ip...]` file for names DHCP never advertises (pins)
+    #[serde(default)]
+    pub extra_hosts_file: String,
+    /// domain suffix LAN names also answer under (bare name always works too)
+    #[serde(default = "default_lan_suffix")]
+    pub suffix: String,
+    /// seconds between lease-file re-reads (0 = load once at startup)
+    #[serde(default = "default_lan_refresh")]
+    pub refresh_interval: u64,
+    /// answer TTL for LAN forward/reverse records
+    #[serde(default = "default_lan_ttl")]
+    pub ttl: u32,
 }
 
 #[derive(Debug, Deserialize)]
@@ -284,6 +309,18 @@ fn default_aaaa_mode() -> String {
 fn default_prewarm_interval() -> u64 {
     3000
 }
+fn default_leases_file() -> String {
+    "/tmp/dhcp.leases".into()
+}
+fn default_lan_suffix() -> String {
+    "lan".into()
+}
+fn default_lan_refresh() -> u64 {
+    30
+}
+fn default_lan_ttl() -> u32 {
+    60
+}
 fn default_strategy() -> String {
     "race".into()
 }
@@ -326,6 +363,11 @@ impl Default for FailoverCfg {
     }
 }
 impl Default for RoutingCfg {
+    fn default() -> Self {
+        toml::from_str("").unwrap()
+    }
+}
+impl Default for LanCfg {
     fn default() -> Self {
         toml::from_str("").unwrap()
     }

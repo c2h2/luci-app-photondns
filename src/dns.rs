@@ -5,6 +5,7 @@
 pub const HEADER_LEN: usize = 12;
 pub const TYPE_A: u16 = 1;
 pub const TYPE_SOA: u16 = 6;
+pub const TYPE_PTR: u16 = 12;
 pub const TYPE_AAAA: u16 = 28;
 pub const TYPE_OPT: u16 = 41;
 pub const TYPE_HTTPS: u16 = 65;
@@ -446,6 +447,30 @@ pub fn build_ip_reply(
         count += 1;
     }
     out[6..8].copy_from_slice(&count.to_be_bytes());
+    out
+}
+
+/// Build a PTR answer (`ptr` = target FQDN, e.g. "host.lan") for a reverse
+/// query. The RDATA encodes the name as length-prefixed labels ending in a
+/// root byte; no compression, so it is self-contained.
+pub fn build_ptr_reply(query: &[u8], meta: &QueryMeta, ptr: &str, ttl: u32) -> Vec<u8> {
+    let mut out = build_reply(query, meta.question_end, RCODE_NOERROR);
+    let mut rdata = Vec::with_capacity(ptr.len() + 2);
+    for label in ptr.split('.') {
+        if label.is_empty() || label.len() > 63 {
+            continue;
+        }
+        rdata.push(label.len() as u8);
+        rdata.extend_from_slice(label.as_bytes());
+    }
+    rdata.push(0); // root
+    out.extend_from_slice(&[0xC0, 0x0C]); // pointer to qname
+    out.extend_from_slice(&TYPE_PTR.to_be_bytes());
+    out.extend_from_slice(&CLASS_IN.to_be_bytes());
+    out.extend_from_slice(&ttl.to_be_bytes());
+    out.extend_from_slice(&(rdata.len() as u16).to_be_bytes());
+    out.extend_from_slice(&rdata);
+    out[6..8].copy_from_slice(&1u16.to_be_bytes()); // ANCOUNT=1
     out
 }
 

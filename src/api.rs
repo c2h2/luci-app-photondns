@@ -147,6 +147,7 @@ fn stats_json(ctx: &Arc<Ctx>) -> serde_json::Value {
             "qpm": s.rate.last_minute(),
             "blocked": s.blocked.load(Ordering::Relaxed),
             "hosts": s.hosts_served.load(Ordering::Relaxed),
+            "lan": s.lan_served.load(Ordering::Relaxed),
             "redirected": s.redirected.load(Ordering::Relaxed),
             "servfail": s.servfail.load(Ordering::Relaxed),
             "hedged": s.hedged.load(Ordering::Relaxed),

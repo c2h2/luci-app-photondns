@@ -13,6 +13,7 @@ mod dns;
 mod doh;
 mod group;
 mod health;
+mod lan;
 mod logger;
 mod qlog;
 mod router;
@@ -105,7 +106,7 @@ async fn run(cfg: config::Config) -> Result<()> {
         }
     }
 
-    let router = router::Router::load(&cfg.routing);
+    let router = router::Router::load_with_lan(&cfg.routing, &cfg.lan);
     let (refresh_tx, refresh_rx) = mpsc::channel(4096);
     let ctx = Arc::new(server::Ctx {
         cache: cache.clone(),
@@ -120,6 +121,7 @@ async fn run(cfg: config::Config) -> Result<()> {
     server::spawn_refresher(ctx.clone(), refresh_rx);
     group::spawn_prober(groups, &ctx.cfg.failover);
     server::spawn_prewarmer(ctx.clone());
+    server::spawn_lan_refresher(ctx.clone());
 
     for addr_str in &ctx.cfg.server.listen {
         let addr: std::net::SocketAddr = addr_str

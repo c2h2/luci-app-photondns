@@ -185,6 +185,33 @@ o.datatype = "and(uinteger,min(0),max(86400))"
 o.default = "3000"
 o:depends("prewarm", "1")
 
+o = s:taboption("basic", Flag, "lan_hosts", translate("Resolve LAN hostnames"),
+	translate("Answer DNS for local network devices by name (learned from DHCP leases) plus a manual pin list, without depending on dnsmasq. Names resolve both bare and under the LAN suffix, and reverse (PTR) lookups work too. Edit the pin list under Rules."))
+o.default = "1"
+o.rmempty = false
+
+o = s:taboption("basic", Value, "lan_suffix", translate("LAN domain suffix"),
+	translate('Domain LAN names also answer under, e.g. "lan" makes a host "nas" resolve as both nas and nas.lan.'))
+o.default = "lan"
+o:depends("lan_hosts", "1")
+
+o = s:taboption("basic", Value, "lan_leases", translate("DHCP lease file"),
+	translate("dnsmasq lease file to learn hostname → IP mappings from; re-read periodically."))
+o.default = "/tmp/dhcp.leases"
+o:depends("lan_hosts", "1")
+
+o = s:taboption("basic", Value, "lan_refresh", translate("LAN refresh interval (s)"),
+	translate("How often to re-read the lease file so new devices appear; 0 = only at startup."))
+o.datatype = "and(uinteger,min(0),max(86400))"
+o.default = "30"
+o:depends("lan_hosts", "1")
+
+o = s:taboption("basic", Value, "lan_ttl", translate("LAN record TTL (s)"),
+	translate("Answer TTL for LAN forward/reverse records."))
+o.datatype = "and(uinteger,min(1),max(86400))"
+o.default = "60"
+o:depends("lan_hosts", "1")
+
 o = s:taboption("basic", Value, "query_log_size", translate("Query log size"),
 	translate("Number of recent queries kept in memory for the Query Log page; 0 disables it"))
 o.datatype = "and(uinteger,max(65536))"

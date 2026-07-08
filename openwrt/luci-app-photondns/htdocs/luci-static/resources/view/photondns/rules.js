@@ -14,7 +14,9 @@ const RULE_FILES = [
 	['redirect', '/etc/photondns/redirect.txt', _('Redirect'),
 		_('"<from-domain> <to-domain>" per line: answer queries for from-domain with the records of to-domain.')],
 	['prewarm', '/etc/photondns/prewarm.txt', _('Prewarm'),
-		_('Domains kept always-resolved (one per line) so a first visit is never a slow cold miss. Default set = YouTube/Google. Enable "Prewarm popular domains" in Basic Settings.')]
+		_('Domains kept always-resolved (one per line) so a first visit is never a slow cold miss. Default set = YouTube/Google. Enable "Prewarm popular domains" in Basic Settings.')],
+	['lan_hosts', '/etc/photondns/lan_hosts.txt', _('LAN Hosts'),
+		_('Extra LAN hosts pinned by name → IP, one "name ip [ip...]" per line, for devices that do not advertise a usable DHCP name (e.g. a Mac). Each resolves bare and under the LAN suffix, and answers reverse PTR. DHCP leases are learned automatically; this file is only for pins. Enable "Resolve LAN hostnames" in Basic Settings.')]
 ];
 
 return view.extend({

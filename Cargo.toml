@@ -1,6 +1,6 @@
 [package]
 name = "photondns"
-version = "0.1.12"
+version = "0.1.13"
 edition = "2021"
 description = "High-performance DNS forwarder with adaptive failover, for OpenWrt"
 license = "GPL-3.0-only"
@@ -33,6 +33,7 @@ log = { version = "0.4", features = ["std"] }
 lru = "0.12"
 fastrand = "2"
 rustc-hash = "2"
+arc-swap = "1"
 # Optional drop-in allocator. HUGE win on musl (OpenWrt) where the libc malloc is
 # slow and lock-contended under multi-thread load; also helps glibc/macOS. Kept
 # behind a feature so the default cross-compile stays pure-Rust (no C toolchain

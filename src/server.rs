@@ -5,7 +5,7 @@ use crate::cache::{self, CacheEntry, DnsCache, Freshness};
 use crate::config::Config;
 use crate::dns;
 use crate::group::Group;
-use crate::router::{Decision, Router};
+use crate::router::{Decision, LanAnswer, Router};
 use crate::stats::Stats;
 use crate::qlog::QueryLog;
 use anyhow::{Context, Result};
@@ -204,6 +204,15 @@ pub async fn handle_query(
             qlog("hosts", "");
             return Some(r);
         }
+        Decision::Lan(ans, ttl) => {
+            stats.lan_served.fetch_add(1, Ordering::Relaxed);
+            let r = match ans {
+                LanAnswer::Addrs(ips) => dns::build_ip_reply(query, &meta, &ips, ttl),
+                LanAnswer::Ptr(name) => dns::build_ptr_reply(query, &meta, &name, ttl),
+            };
+            qlog("lan", "");
+            return Some(r);
+        }
         Decision::Block => {
             stats.blocked.fetch_add(1, Ordering::Relaxed);
             qlog("blocked", "");
@@ -371,6 +380,13 @@ pub async fn resolve_named(ctx: &Arc<Ctx>, name: &str, qtype: u16) -> Result<Res
         Decision::Hosts(ips) => {
             let r = dns::build_ip_reply(&query, &meta, ips, ctx.router.hosts_ttl);
             return Ok(mk("hosts", "", &r));
+        }
+        Decision::Lan(ans, ttl) => {
+            let r = match ans {
+                LanAnswer::Addrs(ips) => dns::build_ip_reply(&query, &meta, &ips, ttl),
+                LanAnswer::Ptr(name) => dns::build_ptr_reply(&query, &meta, &name, ttl),
+            };
+            return Ok(mk("lan", "", &r));
         }
         Decision::Block => {
             let r = dns::build_reply(&query, meta.question_end, dns::RCODE_NXDOMAIN);
@@ -880,6 +896,27 @@ pub fn spawn_prewarmer(ctx: Arc<Ctx>) {
                 break;
             }
             tokio::time::sleep(Duration::from_secs(interval)).await;
+        }
+    });
+}
+
+/// Periodically re-read the DHCP lease + extra-hosts files so newly-joined LAN
+/// clients become resolvable without a restart. No-op when the LAN feature is
+/// disabled. `refresh_interval == 0` means load-once (done at startup already),
+/// so the task exits immediately in that case.
+pub fn spawn_lan_refresher(ctx: Arc<Ctx>) {
+    let Some(interval) = ctx.router.lan_refresh_interval() else {
+        return; // feature disabled
+    };
+    if interval == 0 {
+        return; // loaded once at startup; nothing periodic to do
+    }
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(Duration::from_secs(interval)).await;
+            if let Some(n) = ctx.router.refresh_lan() {
+                log::debug!("lan: refreshed {} hosts", n);
+            }
         }
     });
 }

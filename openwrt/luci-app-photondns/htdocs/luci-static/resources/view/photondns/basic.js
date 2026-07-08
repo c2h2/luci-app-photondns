@@ -237,6 +237,33 @@ return view.extend({
 		o.default = '3000';
 		o.depends('prewarm', '1');
 
+		o = s.taboption('basic', form.Flag, 'lan_hosts', _('Resolve LAN hostnames'),
+			_('Answer DNS for local network devices by name (learned from DHCP leases) plus a manual pin list, without depending on dnsmasq. Names resolve both bare and under the LAN suffix, and reverse (PTR) lookups work too. Edit the pin list under Rules.'));
+		o.default = true;
+		o.rmempty = false;
+
+		o = s.taboption('basic', form.Value, 'lan_suffix', _('LAN domain suffix'),
+			_('Domain LAN names also answer under, e.g. "lan" makes a host "nas" resolve as both nas and nas.lan.'));
+		o.default = 'lan';
+		o.depends('lan_hosts', '1');
+
+		o = s.taboption('basic', form.Value, 'lan_leases', _('DHCP lease file'),
+			_('dnsmasq lease file to learn hostname → IP mappings from; re-read periodically.'));
+		o.default = '/tmp/dhcp.leases';
+		o.depends('lan_hosts', '1');
+
+		o = s.taboption('basic', form.Value, 'lan_refresh', _('LAN refresh interval (s)'),
+			_('How often to re-read the lease file so new devices appear; 0 = only at startup.'));
+		o.datatype = 'and(uinteger,min(0),max(86400))';
+		o.default = '30';
+		o.depends('lan_hosts', '1');
+
+		o = s.taboption('basic', form.Value, 'lan_ttl', _('LAN record TTL (s)'),
+			_('Answer TTL for LAN forward/reverse records.'));
+		o.datatype = 'and(uinteger,min(1),max(86400))';
+		o.default = '60';
+		o.depends('lan_hosts', '1');
+
 		o = s.taboption('basic', form.Value, 'query_log_size', _('Query log size'),
 			_('Number of recent queries kept in memory for the Query Log page; 0 disables it'));
 		o.datatype = 'and(uinteger,max(65536))';

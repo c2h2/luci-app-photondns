@@ -19,6 +19,14 @@ EOF
 # redirect rules: <from-domain> <to-domain>
 # old.example.com new.example.com
 EOF
+[ -f /etc/photondns/lan_hosts.txt ] || cat > /etc/photondns/lan_hosts.txt <<'EOF'
+# Extra LAN hosts pinned by name -> IP, for devices that don't advertise a
+# usable name over DHCP (e.g. a Mac). Format: <name> <ip> [ip...], one per line.
+# Each name resolves both bare and under the lan suffix (e.g. c2h2mbp16 and
+# c2h2mbp16.lan), and the IP answers reverse PTR lookups. DHCP leases are
+# learned automatically; this file is only for names/pins leases don't cover.
+# c2h2mbp16 172.16.10.92
+EOF
 [ -f /etc/photondns/prewarm.txt ] || cat > /etc/photondns/prewarm.txt <<'EOF'
 # Domains kept warm in cache so a first visit is never a slow cold miss.
 # One per line; blank lines and #comments ignored. Both A and AAAA are warmed.

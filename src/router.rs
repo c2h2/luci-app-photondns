@@ -1,10 +1,13 @@
 //! Domain routing: hosts overrides, blocklist, redirect, and
 //! local-domain -> local group dispatch. Matching is O(#labels) hash lookups.
 
-use crate::config::RoutingCfg;
+use crate::config::{LanCfg, RoutingCfg};
+use crate::lan::{self, LanHosts};
+use arc_swap::ArcSwap;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::net::IpAddr;
 use std::path::Path;
+use std::sync::Arc;
 
 // Domain routing is the hottest hashing on the query path: every forwarded name
 // walks its labels against the china/ad sets (100k+ entries each), doing several
@@ -107,11 +110,30 @@ pub struct Router {
     pub hosts_ttl: u32,
     pub reject_type65: bool,
     special: DomainSet,
+    /// LAN client names from DHCP leases + extra-hosts; swapped in on refresh.
+    /// `None` disables the whole feature (no lease reads, no PTR answers).
+    lan: Option<LanState>,
+}
+
+struct LanState {
+    hosts: ArcSwap<LanHosts>,
+    cfg: LanCfg,
+}
+
+/// Answer produced for a LAN forward/reverse hit. Owns its data so it can be
+/// returned past the borrow of the swapped-in `LanHosts` snapshot.
+pub enum LanAnswer {
+    /// A/AAAA addresses for a LAN name
+    Addrs(Vec<IpAddr>),
+    /// PTR target FQDN for a reverse query
+    Ptr(String),
 }
 
 pub enum Decision<'a> {
     /// answer from hosts
     Hosts(&'a Vec<IpAddr>),
+    /// answer from the LAN lease/extra-hosts table (forward or reverse)
+    Lan(LanAnswer, u32),
     /// NXDOMAIN
     Block,
     /// resolve this name instead and answer with its records
@@ -121,7 +143,7 @@ pub enum Decision<'a> {
 }
 
 impl Router {
-    pub fn load(cfg: &RoutingCfg) -> Router {
+    pub fn load_with_lan(cfg: &RoutingCfg, lan_cfg: &LanCfg) -> Router {
         let mut hosts: FxHashMap<String, Vec<IpAddr>> = FxHashMap::default();
         if !cfg.hosts_file.is_empty() && Path::new(&cfg.hosts_file).exists() {
             if let Ok(text) = std::fs::read_to_string(&cfg.hosts_file) {
@@ -173,6 +195,16 @@ impl Router {
                 special.suffix.insert((*d).into());
             }
         }
+        let lan = if lan_cfg.enabled {
+            let h = LanHosts::load(lan_cfg);
+            log::info!("router: {} lan hosts (suffix '{}')", h.len(), lan_cfg.suffix);
+            Some(LanState {
+                hosts: ArcSwap::from_pointee(h),
+                cfg: lan_cfg.clone(),
+            })
+        } else {
+            None
+        };
         log::info!(
             "router: {} hosts, {} blocked ({} from ad lists), {} local-domains, {} redirects",
             hosts.len(),
@@ -189,7 +221,44 @@ impl Router {
             hosts_ttl: cfg.hosts_ttl,
             reject_type65: cfg.reject_type65,
             special,
+            lan,
         }
+    }
+
+    /// Re-read the lease + extra-hosts files and atomically swap the table in.
+    /// No-op if the LAN feature is disabled. Returns the new host count.
+    pub fn refresh_lan(&self) -> Option<usize> {
+        let lan = self.lan.as_ref()?;
+        let fresh = LanHosts::load(&lan.cfg);
+        let n = fresh.len();
+        lan.hosts.store(Arc::new(fresh));
+        Some(n)
+    }
+
+    /// Seconds between LAN refreshes (0 = never), or None if disabled.
+    pub fn lan_refresh_interval(&self) -> Option<u64> {
+        self.lan.as_ref().map(|l| l.cfg.refresh_interval)
+    }
+
+    /// Forward/reverse LAN lookup. Returns an owned answer so the caller does
+    /// not hold the arc-swap snapshot guard across await points.
+    fn lan_decide(&self, qname: &str, qtype: u16) -> Option<Decision<'_>> {
+        let lan = self.lan.as_ref()?;
+        let ttl = lan.cfg.ttl;
+        let snap = lan.hosts.load();
+        if snap.is_empty() {
+            return None;
+        }
+        if qtype == crate::dns::TYPE_PTR {
+            let ip = lan::ptr_to_ip(qname)?;
+            let name = snap.reverse(&ip)?;
+            return Some(Decision::Lan(LanAnswer::Ptr(name.to_string()), ttl));
+        }
+        if qtype == crate::dns::TYPE_A || qtype == crate::dns::TYPE_AAAA {
+            let ips = snap.lookup(qname)?;
+            return Some(Decision::Lan(LanAnswer::Addrs(ips.clone()), ttl));
+        }
+        None
     }
 
     pub fn decide(&self, qname: &str, qtype: u16) -> Decision<'_> {
@@ -206,6 +275,14 @@ impl Router {
         if !self.redirects.is_empty() {
             if let Some(to) = self.redirects.get(qname) {
                 return Decision::Redirect(to);
+            }
+        }
+        // LAN hits win over the special-TLD / private-PTR blocks below: a
+        // `.lan` name or a private-range PTR that we actually know should be
+        // answered, not NXDOMAIN'd as "site-local noise".
+        if self.lan.is_some() {
+            if let Some(d) = self.lan_decide(qname, qtype) {
+                return d;
             }
         }
         if !self.blocked.is_empty() && self.blocked.matches(qname) {
