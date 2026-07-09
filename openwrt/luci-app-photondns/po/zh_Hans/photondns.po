@@ -687,3 +687,32 @@ msgstr "photondns 已启动。"
 
 msgid "photondns stopped."
 msgstr "photondns 已停止。"
+
+# IPv6 (AAAA) handling settings
+msgid "IPv6 (AAAA) handling"
+msgstr "IPv6（AAAA）处理"
+
+msgid "Whether to answer IPv6 (AAAA) lookups. \"Block if IPv4 exists\" suppresses IPv6 only for names that also have an IPv4 address, so IPv6-only sites still work; \"Block all\" forces every client onto IPv4."
+msgstr "是否应答 IPv6（AAAA）查询。“存在 IPv4 时拦截”仅对同时拥有 IPv4 地址的域名抑制 IPv6，因此纯 IPv6 站点仍可正常访问；“全部拦截”会强制所有客户端使用 IPv4。"
+
+msgid "Allow (default)"
+msgstr "允许（默认）"
+
+msgid "Block if IPv4 exists"
+msgstr "存在 IPv4 时拦截"
+
+msgid "Block all IPv6"
+msgstr "拦截全部 IPv6"
+
+# Prewarm settings
+msgid "Prewarm popular domains"
+msgstr "预热热门域名"
+
+msgid "Keep a list of domains (default: YouTube/Google) always resolved so a first visit is never a slow cold miss. Edit the list under Rules."
+msgstr "保持一组域名（默认：YouTube/Google）始终处于已解析状态，使首次访问不会因冷未命中而变慢。可在“规则”页中编辑该列表。"
+
+msgid "Prewarm interval (s)"
+msgstr "预热间隔（秒）"
+
+msgid "How often to refresh the prewarm domains; keep it below the cache stale lifetime so they never fully expire. 0 = only at startup."
+msgstr "多久刷新一次预热域名；应保持小于缓存的陈旧（stale）存活时间，使其始终不会完全过期。0 = 仅在启动时预热。"
