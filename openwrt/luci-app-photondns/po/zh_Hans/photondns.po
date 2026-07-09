@@ -715,7 +715,7 @@ msgid "Prewarm interval (s)"
 msgstr "预热间隔（秒）"
 
 msgid "How often to refresh the prewarm domains; keep it below the cache stale lifetime so they never fully expire. 0 = only at startup."
-msgstr "多久刷新一次预热域名；应保持小于缓存的陈旧（stale）存活时间，使其始终不会完全过期。0 = 仅在启动时预热。"
+msgstr "多久刷新一次预热域名；应保持小于缓存的过期条目保留时间，使其始终不会完全过期。0 = 仅在启动时预热。"
 
 # Log settings
 msgid "Verbosity of the daemon log."
@@ -723,3 +723,118 @@ msgstr "守护进程日志的详细程度。"
 
 msgid "Daemon log path. Leave empty to log to the system log (logread) only - no file. Note: /var on OpenWrt is RAM (tmpfs), so a file here lives in memory and is cleared on reboot."
 msgstr "守护进程日志路径。留空则仅记录到系统日志（logread），不写文件。注意：OpenWrt 的 /var 是内存盘（tmpfs），此处的文件保存在内存中，重启后清空。"
+
+# Menu / page titles
+msgid "Cache Lookup"
+msgstr "缓存查找"
+
+msgid "Help"
+msgstr "帮助"
+
+# Cache Lookup page (checker.js)
+msgid "Type a domain to search what photondns currently has cached. The 15 closest cached records appear as you type (↓/↑ to move, Enter to pick); selecting one runs a full resolve (cache-first) and shows the answers, route, TTL and timing. Pressing Enter without a selection resolves exactly what you typed."
+msgstr "输入域名即可搜索 photondns 当前已缓存的内容。输入时会实时显示最接近的 15 条缓存记录（↓/↑ 移动，回车选择）；选中某条会执行一次完整解析（优先查缓存），并显示应答、路由、TTL 与耗时。未选中直接回车则精确解析你所输入的内容。"
+
+msgid "Start typing a domain (e.g. github.com)..."
+msgstr "开始输入域名（如 github.com）..."
+
+msgid "%d entries cached"
+msgstr "已缓存 %d 条记录"
+
+msgid "Resolving %s..."
+msgstr "正在解析 %s..."
+
+msgid "No response from photondns (is it running?)."
+msgstr "photondns 无响应（是否正在运行？）。"
+
+msgid "Name"
+msgstr "域名"
+
+msgid "Response code"
+msgstr "响应码"
+
+msgid "Answers"
+msgstr "应答"
+
+msgid "(no address records)"
+msgstr "（无地址记录）"
+
+msgid "TTL"
+msgstr "TTL"
+
+msgid "Elapsed"
+msgstr "耗时"
+
+msgid "fresh"
+msgstr "新鲜"
+
+msgid "stale"
+msgstr "过期"
+
+# Cache Lookup page — compat-flavor variants (checker.htm)
+msgid "Type a domain to search what photondns currently has cached. The 15 closest cached records appear as you type; selecting one runs a full resolve and shows the answers, route, TTL and timing."
+msgstr "输入域名即可搜索 photondns 当前已缓存的内容。输入时会实时显示最接近的 15 条缓存记录；选中某条会执行一次完整解析，并显示应答、路由、TTL 与耗时。"
+
+msgid "Resolving"
+msgstr "正在解析"
+
+msgid "entries cached"
+msgstr "条缓存记录"
+
+# Query Log columns (querylog.js)
+msgid "Proto"
+msgstr "协议"
+
+msgid "ms"
+msgstr "毫秒"
+
+# TTL multiplier (basic.js)
+msgid "TTL multiplier"
+msgstr "TTL 倍率"
+
+msgid "Scale upstream TTLs by this factor before the min/max clamp (e.g. 5 turns TTL 90 into 450); 1 = no change"
+msgstr "在最小/最大 TTL 限制之前，按此倍率缩放上游 TTL（例如 5 会把 TTL 90 变为 450）；1 = 不修改"
+
+# LAN hostnames (basic.js + rules.js)
+msgid "Resolve LAN hostnames"
+msgstr "解析局域网主机名"
+
+msgid "Answer DNS for local network devices by name (learned from DHCP leases) plus a manual pin list, without depending on dnsmasq. Names resolve both bare and under the LAN suffix, and reverse (PTR) lookups work too. Edit the pin list under Rules."
+msgstr "无需依赖 dnsmasq，即可按名称为局域网设备应答 DNS（从 DHCP 租约中学习），并支持手动固定列表。主机名可直接解析，也可加上局域网后缀解析，反向（PTR）查询同样有效。可在“规则”页中编辑固定列表。"
+
+msgid "LAN domain suffix"
+msgstr "局域网域名后缀"
+
+msgid "Domain LAN names also answer under, e.g. \"lan\" makes a host \"nas\" resolve as both nas and nas.lan."
+msgstr "局域网名称附加应答的域名后缀，例如设为 \"lan\" 时，主机 \"nas\" 可同时解析为 nas 和 nas.lan。"
+
+msgid "DHCP lease file"
+msgstr "DHCP 租约文件"
+
+msgid "dnsmasq lease file to learn hostname → IP mappings from; re-read periodically."
+msgstr "用于学习主机名 → IP 映射的 dnsmasq 租约文件；将定期重新读取。"
+
+msgid "LAN refresh interval (s)"
+msgstr "局域网刷新间隔（秒）"
+
+msgid "How often to re-read the lease file so new devices appear; 0 = only at startup."
+msgstr "多久重新读取一次租约文件以便发现新设备；0 = 仅在启动时读取。"
+
+msgid "LAN record TTL (s)"
+msgstr "局域网记录 TTL（秒）"
+
+msgid "Answer TTL for LAN forward/reverse records."
+msgstr "局域网正向/反向记录的应答 TTL。"
+
+msgid "LAN Hosts"
+msgstr "局域网主机"
+
+msgid "Extra LAN hosts pinned by name → IP, one \"name ip [ip...]\" per line, for devices that do not advertise a usable DHCP name (e.g. a Mac). Each resolves bare and under the LAN suffix, and answers reverse PTR. DHCP leases are learned automatically; this file is only for pins. Enable \"Resolve LAN hostnames\" in Basic Settings."
+msgstr "按名称 → IP 手动固定的额外局域网主机，每行一条 \"名称 IP [IP...]\"，适用于不广播可用 DHCP 名称的设备（如 Mac）。每条均可直接解析，也可加局域网后缀解析，并应答反向 PTR。DHCP 租约会自动学习，此文件仅用于固定项。请在基本设置中启用“解析局域网主机名”。"
+
+# Prewarm (rules.js)
+msgid "Prewarm"
+msgstr "预热"
+
+msgid "Domains kept always-resolved (one per line) so a first visit is never a slow cold miss. Default set = YouTube/Google. Enable \"Prewarm popular domains\" in Basic Settings."
+msgstr "保持始终已解析的域名（每行一个），使首次访问不会因冷未命中而变慢。默认集合 = YouTube/Google。请在基本设置中启用“预热热门域名”。"

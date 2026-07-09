@@ -199,9 +199,6 @@ msgstr ""
 msgid "Answer HTTPS/SVCB queries with NXDOMAIN, forcing clients onto plain A/AAAA records"
 msgstr ""
 
-msgid "Primary DNS servers"
-msgstr ""
-
 msgid "Routing mode"
 msgstr ""
 
@@ -245,9 +242,6 @@ msgid "Only used when primary servers fail; also raced as a last hedge candidate
 msgstr ""
 
 msgid "Local-domain DNS servers"
-msgstr ""
-
-msgid "Optional group used for domains listed in the local_domains rule file (e.g. China DNS)"
 msgstr ""
 
 msgid "Bootstrap DNS"
@@ -364,6 +358,12 @@ msgstr ""
 msgid "How long past expiry an entry may still be served"
 msgstr ""
 
+msgid "Stale answer TTL (s)"
+msgstr ""
+
+msgid "TTL stamped on stale answers so clients can cache them briefly; RFC 8767 recommends 30"
+msgstr ""
+
 msgid "Prefetch popular entries"
 msgstr ""
 
@@ -373,10 +373,13 @@ msgstr ""
 msgid "Persist cache to disk"
 msgstr ""
 
-msgid "Save the cache on shutdown and periodically; restore it on startup"
+msgid "Save the cache on shutdown (and optionally at intervals); restore it on startup"
 msgstr ""
 
 msgid "Cache save interval (s)"
+msgstr ""
+
+msgid "0 = save only on shutdown (spares flash wear); otherwise dump every N seconds"
 msgstr ""
 
 msgid "Rule files are applied on service restart."
@@ -418,19 +421,7 @@ msgstr ""
 msgid "(empty)"
 msgstr ""
 
-msgid "China domain list (split DNS)"
-msgstr ""
-
-msgid "Route mainland-China domains to the Local-domain DNS servers, everything else to the primary servers. Uses the dnsmasq-china-list (~70k domains)."
-msgstr ""
-
-msgid "China List"
-msgstr ""
-
 msgid "China Domain List"
-msgstr ""
-
-msgid "Manually download or update the mainland-China domain list used for split-DNS routing. Source: felixonmars/dnsmasq-china-list, fetched via CN-friendly mirrors. Enable \"China domain list (split DNS)\" and configure Local-domain DNS servers in Basic Settings to use it."
 msgstr ""
 
 msgid "Current list"
@@ -451,25 +442,13 @@ msgstr ""
 msgid "Updating..."
 msgstr ""
 
-msgid "Update log"
-msgstr ""
-
 msgid "not downloaded yet"
 msgstr ""
 
 msgid "Update failed to start: %s"
 msgstr ""
 
-msgid "China list update started in the background."
-msgstr ""
-
-msgid "China list: %d domains."
-msgstr ""
-
 msgid "China list status"
-msgstr ""
-
-msgid "not downloaded yet - use the China List page to download it"
 msgstr ""
 
 msgid "%d domains, updated %s"
@@ -553,9 +532,6 @@ msgstr ""
 msgid "Ad list status"
 msgstr ""
 
-msgid "not downloaded yet - use the List Updates page to download it"
-msgstr ""
-
 msgid "Auto-update lists"
 msgstr ""
 
@@ -607,9 +583,6 @@ msgstr ""
 msgid "DNSPod (DoT)"
 msgstr ""
 
-msgid "AliDNS (DoH)"
-msgstr ""
-
 msgid "Google (DoT)"
 msgstr ""
 
@@ -621,3 +594,235 @@ msgstr ""
 
 msgid "Quad9 (UDP)"
 msgstr ""
+
+msgid "131072 (~50 MB)"
+msgstr ""
+
+msgid "16384 (~6 MB)"
+msgstr ""
+
+msgid "262144 (~100 MB)"
+msgstr ""
+
+msgid "32768 (~13 MB)"
+msgstr ""
+
+msgid "65536 (~25 MB)"
+msgstr ""
+
+msgid "8192 (~3 MB)"
+msgstr ""
+
+msgid "Could not change service state."
+msgstr ""
+
+msgid "Could not change service state: "
+msgstr ""
+
+msgid "DoH Path"
+msgstr ""
+
+msgid "DoH Port"
+msgstr ""
+
+msgid "DoH Server"
+msgstr ""
+
+msgid "DoH TLS Certificate"
+msgstr ""
+
+msgid "DoH TLS Key"
+msgstr ""
+
+msgid "Listen on TCP"
+msgstr ""
+
+msgid "Listen on UDP"
+msgstr ""
+
+msgid "Loading..."
+msgstr ""
+
+msgid "Maximum number of cached responses (sharded LRU). RAM shown is the ceiling when the cache is fully populated (~400 B/entry); actual use grows lazily."
+msgstr ""
+
+msgid "Path to a PEM certificate chain; leave empty when behind a reverse proxy"
+msgstr ""
+
+msgid "Path to the PEM private key"
+msgstr ""
+
+msgid "Serve DNS over TCP on the listen port (needed for large answers)"
+msgstr ""
+
+msgid "Serve DNS-over-HTTPS (RFC 8484) on the DoH port. Runs plain HTTP unless a certificate is set below - put a TLS reverse proxy (Caddy/nginx) in front, or set cert + key to serve HTTPS directly"
+msgstr ""
+
+msgid "Serve classic DNS over UDP on the listen port"
+msgstr ""
+
+msgid "Service disabled"
+msgstr ""
+
+msgid "Service enabled"
+msgstr ""
+
+msgid "Turn Off"
+msgstr ""
+
+msgid "Turn On"
+msgstr ""
+
+msgid "Update failed to start:"
+msgstr ""
+
+msgid "domains, updated"
+msgstr ""
+
+msgid "photondns started."
+msgstr ""
+
+msgid "photondns stopped."
+msgstr ""
+
+msgid "IPv6 (AAAA) handling"
+msgstr ""
+
+msgid "Whether to answer IPv6 (AAAA) lookups. \"Block if IPv4 exists\" suppresses IPv6 only for names that also have an IPv4 address, so IPv6-only sites still work; \"Block all\" forces every client onto IPv4."
+msgstr ""
+
+msgid "Allow (default)"
+msgstr ""
+
+msgid "Block if IPv4 exists"
+msgstr ""
+
+msgid "Block all IPv6"
+msgstr ""
+
+msgid "Prewarm popular domains"
+msgstr ""
+
+msgid "Keep a list of domains (default: YouTube/Google) always resolved so a first visit is never a slow cold miss. Edit the list under Rules."
+msgstr ""
+
+msgid "Prewarm interval (s)"
+msgstr ""
+
+msgid "How often to refresh the prewarm domains; keep it below the cache stale lifetime so they never fully expire. 0 = only at startup."
+msgstr ""
+
+msgid "Verbosity of the daemon log."
+msgstr ""
+
+msgid "Daemon log path. Leave empty to log to the system log (logread) only - no file. Note: /var on OpenWrt is RAM (tmpfs), so a file here lives in memory and is cleared on reboot."
+msgstr ""
+
+msgid "Cache Lookup"
+msgstr ""
+
+msgid "Help"
+msgstr ""
+
+msgid "Type a domain to search what photondns currently has cached. The 15 closest cached records appear as you type (↓/↑ to move, Enter to pick); selecting one runs a full resolve (cache-first) and shows the answers, route, TTL and timing. Pressing Enter without a selection resolves exactly what you typed."
+msgstr ""
+
+msgid "Start typing a domain (e.g. github.com)..."
+msgstr ""
+
+msgid "%d entries cached"
+msgstr ""
+
+msgid "Resolving %s..."
+msgstr ""
+
+msgid "No response from photondns (is it running?)."
+msgstr ""
+
+msgid "Name"
+msgstr ""
+
+msgid "Response code"
+msgstr ""
+
+msgid "Answers"
+msgstr ""
+
+msgid "(no address records)"
+msgstr ""
+
+msgid "TTL"
+msgstr ""
+
+msgid "Elapsed"
+msgstr ""
+
+msgid "fresh"
+msgstr ""
+
+msgid "stale"
+msgstr ""
+
+msgid "Type a domain to search what photondns currently has cached. The 15 closest cached records appear as you type; selecting one runs a full resolve and shows the answers, route, TTL and timing."
+msgstr ""
+
+msgid "Resolving"
+msgstr ""
+
+msgid "entries cached"
+msgstr ""
+
+msgid "Proto"
+msgstr ""
+
+msgid "ms"
+msgstr ""
+
+msgid "TTL multiplier"
+msgstr ""
+
+msgid "Scale upstream TTLs by this factor before the min/max clamp (e.g. 5 turns TTL 90 into 450); 1 = no change"
+msgstr ""
+
+msgid "Resolve LAN hostnames"
+msgstr ""
+
+msgid "Answer DNS for local network devices by name (learned from DHCP leases) plus a manual pin list, without depending on dnsmasq. Names resolve both bare and under the LAN suffix, and reverse (PTR) lookups work too. Edit the pin list under Rules."
+msgstr ""
+
+msgid "LAN domain suffix"
+msgstr ""
+
+msgid "Domain LAN names also answer under, e.g. \"lan\" makes a host \"nas\" resolve as both nas and nas.lan."
+msgstr ""
+
+msgid "DHCP lease file"
+msgstr ""
+
+msgid "dnsmasq lease file to learn hostname → IP mappings from; re-read periodically."
+msgstr ""
+
+msgid "LAN refresh interval (s)"
+msgstr ""
+
+msgid "How often to re-read the lease file so new devices appear; 0 = only at startup."
+msgstr ""
+
+msgid "LAN record TTL (s)"
+msgstr ""
+
+msgid "Answer TTL for LAN forward/reverse records."
+msgstr ""
+
+msgid "LAN Hosts"
+msgstr ""
+
+msgid "Extra LAN hosts pinned by name → IP, one \"name ip [ip...]\" per line, for devices that do not advertise a usable DHCP name (e.g. a Mac). Each resolves bare and under the LAN suffix, and answers reverse PTR. DHCP leases are learned automatically; this file is only for pins. Enable \"Resolve LAN hostnames\" in Basic Settings."
+msgstr ""
+
+msgid "Prewarm"
+msgstr ""
+
+msgid "Domains kept always-resolved (one per line) so a first visit is never a slow cold miss. Default set = YouTube/Google. Enable \"Prewarm popular domains\" in Basic Settings."
+msgstr ""
+
