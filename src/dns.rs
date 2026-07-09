@@ -356,9 +356,12 @@ pub fn set_ttls(buf: &mut [u8], offsets: &[u16], value: u32) {
     }
 }
 
-/// Clamp every RR TTL into [min_ttl, max_ttl] (0 = no bound) in place.
-pub fn clamp_ttls(buf: &mut [u8], question_end: usize, min_ttl: u32, max_ttl: u32) {
-    if min_ttl == 0 && max_ttl == 0 {
+/// Scale every RR TTL by `multiply` (1.0 = no-op) then clamp into
+/// [min_ttl, max_ttl] (0 = no bound), in place. Multiply happens before the
+/// clamp so max_ttl still caps the scaled value.
+pub fn clamp_ttls(buf: &mut [u8], question_end: usize, multiply: f32, min_ttl: u32, max_ttl: u32) {
+    let scaling = multiply > 0.0 && (multiply - 1.0).abs() > f32::EPSILON;
+    if !scaling && min_ttl == 0 && max_ttl == 0 {
         return;
     }
     let qdcount = match u16_at(buf, 4) {
@@ -374,6 +377,10 @@ pub fn clamp_ttls(buf: &mut [u8], question_end: usize, min_ttl: u32, max_ttl: u3
             continue;
         }
         let mut ttl = rr.ttl;
+        if scaling {
+            // f64 to avoid precision loss on large TTLs; saturate to u32.
+            ttl = (ttl as f64 * multiply as f64).round().clamp(0.0, u32::MAX as f64) as u32;
+        }
         if min_ttl > 0 && ttl < min_ttl {
             ttl = min_ttl;
         }
@@ -590,9 +597,34 @@ mod tests {
     #[test]
     fn clamping() {
         let (mut r, qend) = sample_response();
-        clamp_ttls(&mut r, qend, 120, 200);
+        clamp_ttls(&mut r, qend, 1.0, 120, 200);
         let info = cache_info(&r, qend, 30).unwrap();
         assert_eq!(info.ttl, 120); // 60 raised to 120, 300 lowered to 200
+    }
+
+    #[test]
+    fn ttl_multiply() {
+        // record wire order in sample_response is [300, 60].
+        // multiply happens before the clamp: 300*5=1500 -> capped at 1000, 60*5=300
+        let (mut r, qend) = sample_response();
+        clamp_ttls(&mut r, qend, 5.0, 0, 1000);
+        let offs = cache_info(&r, qend, 30).unwrap().ttl_offsets;
+        let ttls: Vec<u32> = offs.iter().map(|&o| u32_at(&r, o as usize).unwrap()).collect();
+        assert_eq!(ttls, vec![1000, 300]);
+
+        // factor 1.0 is a no-op even with no clamp bounds
+        let (mut r2, qend2) = sample_response();
+        clamp_ttls(&mut r2, qend2, 1.0, 0, 0);
+        let offs2 = cache_info(&r2, qend2, 30).unwrap().ttl_offsets;
+        let ttls2: Vec<u32> = offs2.iter().map(|&o| u32_at(&r2, o as usize).unwrap()).collect();
+        assert_eq!(ttls2, vec![300, 60]);
+
+        // fractional shrink then min-floor: 300*0.5=150, 60*0.5=30 -> floored to 50
+        let (mut r3, qend3) = sample_response();
+        clamp_ttls(&mut r3, qend3, 0.5, 50, 0);
+        let offs3 = cache_info(&r3, qend3, 30).unwrap().ttl_offsets;
+        let ttls3: Vec<u32> = offs3.iter().map(|&o| u32_at(&r3, o as usize).unwrap()).collect();
+        assert_eq!(ttls3, vec![150, 50]);
     }
 
     #[test]

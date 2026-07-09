@@ -438,6 +438,13 @@ return view.extend({
 		o.default = '86400';
 		o.depends('cache', '1');
 
+		o = s.taboption('cache', form.Value, 'ttl_multiply', _('TTL multiplier'),
+			_('Scale upstream TTLs by this factor before the min/max clamp (e.g. 5 turns TTL 90 into 450); 1 = no change'));
+		o.datatype = 'and(ufloat,min(0),max(100))';
+		o.default = '1.0';
+		o.placeholder = '1.0';
+		o.depends('cache', '1');
+
 		o = s.taboption('cache', form.Value, 'negative_ttl', _('Negative cache TTL (s)'),
 			_('How long NXDOMAIN / empty answers are cached'));
 		o.datatype = 'and(uinteger,min(0))';

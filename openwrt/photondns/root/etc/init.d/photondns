@@ -29,6 +29,7 @@ get_config() {
 	config_get cache_size $1 cache_size 8192
 	config_get min_ttl $1 min_ttl 0
 	config_get max_ttl $1 max_ttl 86400
+	config_get ttl_multiply $1 ttl_multiply 1.0
 	config_get negative_ttl $1 negative_ttl 30
 	config_get serve_stale $1 serve_stale 1
 	config_get stale_ttl $1 stale_ttl 86400
@@ -127,6 +128,7 @@ generate_config() {
 	size = $cache_size
 	min_ttl = $min_ttl
 	max_ttl = $max_ttl
+	ttl_multiply = $ttl_multiply
 	negative_ttl = $negative_ttl
 	serve_stale = $(bool_str $serve_stale)
 	stale_ttl = $stale_ttl

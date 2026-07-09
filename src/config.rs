@@ -102,6 +102,9 @@ pub struct CacheCfg {
     pub min_ttl: u32,
     #[serde(default = "default_max_ttl")]
     pub max_ttl: u32,
+    /// scale upstream TTLs by this factor before the min/max clamp (1.0 = off)
+    #[serde(default = "default_ttl_multiply")]
+    pub ttl_multiply: f32,
     #[serde(default = "default_negative_ttl")]
     pub negative_ttl: u32,
     /// serve expired entries immediately and refresh in background (lazy cache)
@@ -257,6 +260,9 @@ fn default_cache_size() -> usize {
 }
 fn default_max_ttl() -> u32 {
     86400
+}
+fn default_ttl_multiply() -> f32 {
+    1.0
 }
 fn default_negative_ttl() -> u32 {
     30

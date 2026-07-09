@@ -85,6 +85,7 @@ fn cache_store(ctx: &Ctx, key: cache::CacheKey, resp: &mut Vec<u8>, question_end
     dns::clamp_ttls(
         resp,
         question_end,
+        ctx.cfg.cache.ttl_multiply,
         ctx.cfg.cache.min_ttl,
         ctx.cfg.cache.max_ttl,
     );

@@ -390,6 +390,13 @@ o.datatype = "and(uinteger,min(0),max(604800))"
 o.default = "86400"
 o:depends("cache", "1")
 
+o = s:taboption("cache", Value, "ttl_multiply", translate("TTL multiplier"),
+	translate("Scale upstream TTLs by this factor before the min/max clamp (e.g. 5 turns TTL 90 into 450); 1 = no change"))
+o.datatype = "and(ufloat,min(0),max(100))"
+o.default = "1.0"
+o.placeholder = "1.0"
+o:depends("cache", "1")
+
 o = s:taboption("cache", Value, "negative_ttl", translate("Negative cache TTL (s)"),
 	translate("How long NXDOMAIN / empty answers are cached"))
 o.datatype = "and(uinteger,min(0))"
