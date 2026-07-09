@@ -716,3 +716,10 @@ msgstr "预热间隔（秒）"
 
 msgid "How often to refresh the prewarm domains; keep it below the cache stale lifetime so they never fully expire. 0 = only at startup."
 msgstr "多久刷新一次预热域名；应保持小于缓存的陈旧（stale）存活时间，使其始终不会完全过期。0 = 仅在启动时预热。"
+
+# Log settings
+msgid "Verbosity of the daemon log."
+msgstr "守护进程日志的详细程度。"
+
+msgid "Daemon log path. Leave empty to log to the system log (logread) only - no file. Note: /var on OpenWrt is RAM (tmpfs), so a file here lives in memory and is cleared on reboot."
+msgstr "守护进程日志路径。留空则仅记录到系统日志（logread），不写文件。注意：OpenWrt 的 /var 是内存盘（tmpfs），此处的文件保存在内存中，重启后清空。"
