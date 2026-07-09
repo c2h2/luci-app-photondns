@@ -10,6 +10,8 @@ pub struct QueryLogEntry {
     pub client: String,
     pub qname: String,
     pub qtype: u16,
+    /// how the client query arrived: "udp" | "tcp" | "doh"
+    pub proto: &'static str,
     /// cache | stale | hosts | blocked | redirect | servfail | <group name>
     pub route: String,
     /// winning upstream for forwarded queries, "" otherwise
@@ -45,11 +47,13 @@ impl QueryLog {
         buf.push_back(entry);
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn record(
         &self,
         client: std::net::IpAddr,
         qname: &str,
         qtype: u16,
+        proto: &'static str,
         route: &str,
         upstream: &str,
         rtt: std::time::Duration,
@@ -65,6 +69,7 @@ impl QueryLog {
             client: client.to_string(),
             qname: qname.to_string(),
             qtype,
+            proto,
             route: route.to_string(),
             upstream: upstream.to_string(),
             rtt_us: rtt.as_micros().min(u32::MAX as u128) as u32,
@@ -83,6 +88,7 @@ impl QueryLog {
                     "client": e.client,
                     "qname": e.qname,
                     "qtype": e.qtype,
+                    "proto": e.proto,
                     "route": e.route,
                     "upstream": e.upstream,
                     "rtt_ms": (e.rtt_us as f64 / 100.0).round() / 10.0,
@@ -109,6 +115,7 @@ mod tests {
                 client: "10.0.0.1".into(),
                 qname: format!("q{}.example.com", i),
                 qtype: 1,
+                proto: "udp",
                 route: "cache".into(),
                 upstream: String::new(),
                 rtt_us: 100,
@@ -129,6 +136,7 @@ mod tests {
             "10.0.0.1".parse().unwrap(),
             "x.com",
             1,
+            "udp",
             "cache",
             "",
             std::time::Duration::from_millis(1),

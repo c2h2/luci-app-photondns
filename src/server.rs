@@ -42,6 +42,17 @@ pub enum Transport {
     Doh,
 }
 
+impl Transport {
+    /// Short label for the query log / stats.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Transport::Udp => "udp",
+            Transport::Tcp => "tcp",
+            Transport::Doh => "doh",
+        }
+    }
+}
+
 impl Ctx {
     pub fn group(&self, name: &str) -> &Arc<Group> {
         self.groups
@@ -198,11 +209,13 @@ pub async fn handle_query(
         return Some(r);
     };
 
+    let proto = transport.as_str();
     let qlog = |route: &str, upstream: &str| {
         ctx.qlog.record(
             client,
             &meta.qname,
             meta.qtype,
+            proto,
             route,
             upstream,
             start.elapsed(),

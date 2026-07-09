@@ -191,15 +191,18 @@ return view.extend({
 			_('Path to the PEM private key'));
 		o.depends('doh', '1');
 
-		o = s.taboption('basic', form.ListValue, 'log_level', _('Log Level'));
+		o = s.taboption('basic', form.ListValue, 'log_level', _('Log Level'),
+			_('Verbosity of the daemon log.'));
 		o.value('debug', _('Debug'));
 		o.value('info', _('Info'));
 		o.value('warn', _('Warning'));
 		o.value('error', _('Error'));
 		o.default = 'info';
 
-		o = s.taboption('basic', form.Value, 'log_file', _('Log File'));
+		o = s.taboption('basic', form.Value, 'log_file', _('Log File'),
+			_('Daemon log path. Leave empty to log to the system log (logread) only - no file. Note: /var on OpenWrt is RAM (tmpfs), so a file here lives in memory and is cleared on reboot.'));
 		o.default = '/var/log/photondns.log';
+		o.rmempty = false;
 
 		o = s.taboption('basic', form.Value, 'api_port', _('API Port'),
 			_('Local HTTP API for statistics and cache control (127.0.0.1 only)'));

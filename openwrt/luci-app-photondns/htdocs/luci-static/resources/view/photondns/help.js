@@ -413,6 +413,11 @@ return view.extend({
 				'background:rgba(128,128,128,.05)'
 		});
 		var container = E('div', {});
+		var footer = E('div', {
+			style: 'margin:18px 0 4px 0; padding-top:12px; ' +
+				'border-top:1px solid rgba(128,128,128,.22); ' +
+				'font-size:.9rem; color:var(--fg-color-2,#888)'
+		});
 
 		function bodyNode(t, accent) {
 			var def = asDefLine(t);
@@ -474,6 +479,14 @@ return view.extend({
 				nav.appendChild(navChip(section));
 				container.appendChild(card(section, idx));
 			});
+			footer.innerHTML = '';
+			footer.appendChild(document.createTextNode(
+				lang === 'zh' ? '源码与文档：' : 'Source & docs: '));
+			footer.appendChild(E('a', {
+				href: 'https://github.com/c2h2/luci-app-photondns',
+				target: '_blank', rel: 'noopener',
+				style: 'color:#2563eb; text-decoration:none'
+			}, 'github.com/c2h2/luci-app-photondns'));
 		}
 
 		function mkLangBtn(code, label) {
@@ -512,7 +525,8 @@ return view.extend({
 			header,
 			intro,
 			nav,
-			container
+			container,
+			footer
 		]);
 	},
 

@@ -139,15 +139,18 @@ o = s:taboption("basic", Value, "doh_key", translate("DoH TLS Key"),
 	translate("Path to the PEM private key"))
 o:depends("doh", "1")
 
-o = s:taboption("basic", ListValue, "log_level", translate("Log Level"))
+o = s:taboption("basic", ListValue, "log_level", translate("Log Level"),
+	translate("Verbosity of the daemon log."))
 o:value("debug", translate("Debug"))
 o:value("info", translate("Info"))
 o:value("warn", translate("Warning"))
 o:value("error", translate("Error"))
 o.default = "info"
 
-o = s:taboption("basic", Value, "log_file", translate("Log File"))
+o = s:taboption("basic", Value, "log_file", translate("Log File"),
+	translate("Daemon log path. Leave empty to log to the system log (logread) only - no file. Note: /var on OpenWrt is RAM (tmpfs), so a file here lives in memory and is cleared on reboot."))
 o.default = "/var/log/photondns.log"
+o.rmempty = false
 
 o = s:taboption("basic", Value, "api_port", translate("API Port"),
 	translate("Local HTTP API for statistics and cache control (127.0.0.1 only)"))

@@ -1,6 +1,6 @@
 [package]
 name = "photondns"
-version = "0.1.14"
+version = "0.2.0"
 edition = "2021"
 description = "High-performance DNS forwarder with adaptive failover, for OpenWrt"
 license = "GPL-3.0-only"
