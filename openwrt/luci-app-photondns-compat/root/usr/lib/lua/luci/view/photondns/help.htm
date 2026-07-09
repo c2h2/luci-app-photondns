@@ -17,6 +17,7 @@
 <p id="pdns_help_intro" style="color:#666; margin:0 0 12px 0; line-height:1.5"></p>
 <div id="pdns_help_nav" style="display:flex; flex-wrap:wrap; gap:6px; margin:0 0 18px 0; padding:12px 14px; border:1px solid rgba(128,128,128,.22); border-radius:10px; background:rgba(128,128,128,.05)"></div>
 <div id="pdns_help_body"></div>
+<div id="pdns_help_source" style="margin:18px 0 4px 0; padding-top:12px; border-top:1px solid rgba(128,128,128,.22); font-size:.9rem; color:#888"></div>
 
 <script type="text/javascript">//<![CDATA[
 (function () {
@@ -211,6 +212,7 @@
 	var intro = document.getElementById('pdns_help_intro');
 	var nav  = document.getElementById('pdns_help_nav');
 	var body = document.getElementById('pdns_help_body');
+	var src  = document.getElementById('pdns_help_source');
 	var enBtn = document.getElementById('pdns_help_en');
 	var zhBtn = document.getElementById('pdns_help_zh');
 
@@ -255,6 +257,11 @@
 			html += '</div>';
 		}
 		body.innerHTML = html;
+
+		src.innerHTML = (lang === 'zh' ? '源码与文档：' : 'Source &amp; docs: ') +
+			'<a href="https://github.com/c2h2/luci-app-photondns" target="_blank" ' +
+			'rel="noopener" style="color:#2563eb; text-decoration:none">' +
+			'github.com/c2h2/luci-app-photondns</a>';
 	}
 
 	function setLang(l) {
