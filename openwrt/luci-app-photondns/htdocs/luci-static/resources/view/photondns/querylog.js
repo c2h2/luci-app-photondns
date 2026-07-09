@@ -27,11 +27,56 @@ const ROUTE_COLORS = {
 	main: '#0d6efd'
 };
 
+const PROTO_COLORS = {
+	udp: '#607d8b',
+	tcp: '#00838f',
+	doh: '#5e35b1'
+};
+
 function routeBadge(route) {
 	const color = ROUTE_COLORS[route] || '#0d6efd';
 	return E('span', {
 		style: 'padding:0 7px; border-radius:8px; color:#fff; font-size:90%; background:' + color
 	}, route);
+}
+
+function protoBadge(proto) {
+	const p = (proto || '').toLowerCase();
+	const color = PROTO_COLORS[p] || '#888';
+	return E('span', {
+		style: 'padding:0 5px; border-radius:6px; color:#fff; font-size:80%; background:' + color
+	}, p ? p.toUpperCase() : '-');
+}
+
+// Compact styling so the in-memory log shows as many rows as possible.
+const DENSE_CSS = '' +
+	'#qlog_table table.cbi-section-table{border-collapse:collapse;width:100%;margin:0}' +
+	'#qlog_table .th,#qlog_table .td{padding:1px 6px;font-size:12px;line-height:1.45;' +
+		'vertical-align:top;border:0;white-space:nowrap}' +
+	'#qlog_table td.qname{white-space:normal;word-break:break-all}' +
+	'#qlog_table .table-titles .th{font-size:11px;text-transform:uppercase;' +
+		'letter-spacing:.03em;opacity:.7}' +
+	'#qlog_table .tr:nth-child(2n) .td{background:rgba(127,127,127,.07)}' +
+	'#qlog_table .qcount{font-weight:600;color:#d43f3a;margin-left:3px}';
+
+// Collapse identical consecutive queries into one row + count, as long as
+// each repeat is within GROUP_WINDOW seconds of the previous one.
+const GROUP_WINDOW = 3;
+function groupEntries(list) {
+	const out = [], active = {};
+	for (const e of list) {
+		const key = (e.client || '') + '|' + (e.qname || '') + '|' + e.qtype + '|' +
+			(e.proto || '') + '|' + (e.route || '') + '|' + (e.upstream || '');
+		const gi = active[key];
+		if (gi != null && (out[gi].anchor - e.ts) <= GROUP_WINDOW) {
+			out[gi].count++;
+			out[gi].anchor = e.ts;
+		} else {
+			out.push({ e: e, count: 1, anchor: e.ts });
+			active[key] = out.length - 1;
+		}
+	}
+	return out;
 }
 
 function fmtTime(ts) {
@@ -56,26 +101,33 @@ return view.extend({
 	renderTable(entries) {
 		const tbl = E('table', { class: 'table cbi-section-table' }, [
 			E('tr', { class: 'tr table-titles' }, [
-				E('th', { class: 'th', style: 'width:70px' }, _('Time')),
-				E('th', { class: 'th', style: 'width:120px' }, _('Client')),
+				E('th', { class: 'th', style: 'width:64px' }, _('Time')),
+				E('th', { class: 'th', style: 'width:110px' }, _('Client')),
+				E('th', { class: 'th', style: 'width:48px' }, _('Proto')),
 				E('th', { class: 'th' }, _('Domain')),
-				E('th', { class: 'th', style: 'width:70px' }, _('Type')),
-				E('th', { class: 'th', style: 'width:90px' }, _('Route')),
+				E('th', { class: 'th', style: 'width:56px' }, _('Type')),
+				E('th', { class: 'th', style: 'width:74px' }, _('Route')),
 				E('th', { class: 'th' }, _('Upstream')),
-				E('th', { class: 'th', style: 'width:80px; text-align:right' }, _('Time (ms)'))
+				E('th', { class: 'th', style: 'width:66px; text-align:right' }, _('ms'))
 			])
 		]);
 		const f = this.filter.toLowerCase();
+		const filtered = entries.filter(e => !f || e.qname.includes(f) ||
+			e.client.includes(f) || e.route.includes(f) ||
+			(e.proto || '').includes(f) || (e.upstream || '').includes(f));
+		const groups = groupEntries(filtered);
 		let shown = 0;
-		for (const e of entries) {
-			if (f && !(e.qname.includes(f) || e.client.includes(f) ||
-				e.route.includes(f) || (e.upstream || '').includes(f)))
-				continue;
+		for (const grp of groups) {
 			if (++shown > 500) break;
+			const e = grp.e;
+			const qcell = grp.count > 1
+				? [e.qname, E('span', { class: 'qcount' }, '(' + grp.count + ')')]
+				: e.qname;
 			tbl.appendChild(E('tr', { class: 'tr' }, [
 				E('td', { class: 'td' }, fmtTime(e.ts)),
 				E('td', { class: 'td' }, e.client),
-				E('td', { class: 'td', style: 'word-break:break-all' }, e.qname),
+				E('td', { class: 'td' }, protoBadge(e.proto)),
+				E('td', { class: 'td qname' }, qcell),
 				E('td', { class: 'td' }, QTYPES[e.qtype] || String(e.qtype)),
 				E('td', { class: 'td' }, routeBadge(e.route)),
 				E('td', { class: 'td' }, e.upstream || '-'),
@@ -85,7 +137,7 @@ return view.extend({
 		}
 		if (shown === 0)
 			tbl.appendChild(E('tr', { class: 'tr' }, [
-				E('td', { class: 'td', colspan: 7, style: 'opacity:.6' }, _('(no entries)'))
+				E('td', { class: 'td', colspan: 8, style: 'opacity:.6' }, _('(no entries)'))
 			]));
 		return tbl;
 	},
@@ -113,6 +165,7 @@ return view.extend({
 		poll.add(() => this.refresh(), 3);
 
 		return E('div', { class: 'cbi-map' }, [
+			E('style', { type: 'text/css' }, DENSE_CSS),
 			E('h2', {}, _('Query Log')),
 			E('div', { class: 'cbi-map-descr' },
 				_('Live view of recent DNS queries: which client asked, how each query was answered (cache, hosts, blocked, or the upstream group and server that won the race) and how long it took. Kept in memory only.')),

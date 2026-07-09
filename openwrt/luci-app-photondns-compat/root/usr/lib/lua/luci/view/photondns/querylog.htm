@@ -5,6 +5,15 @@
 	<%:Live view of recent DNS queries: which client asked, how each query was answered (cache, hosts, blocked, or the upstream group and server that won the race) and how long it took. Kept in memory only.%>
 </div>
 
+<style type="text/css">
+#photondns_qlog table.cbi-section-table{border-collapse:collapse;width:100%;margin:0}
+#photondns_qlog .th,#photondns_qlog .td{padding:1px 6px;font-size:12px;line-height:1.45;vertical-align:top;border:0;white-space:nowrap}
+#photondns_qlog td.qname{white-space:normal;word-break:break-all}
+#photondns_qlog .table-titles .th{font-size:11px;text-transform:uppercase;letter-spacing:.03em;opacity:.7}
+#photondns_qlog .tr:nth-child(2n) .td{background:rgba(127,127,127,.07)}
+#photondns_qlog .qcount{font-weight:600;color:#d43f3a;margin-left:3px}
+</style>
+
 <div style="margin:8px 0">
 	<input type="text" class="cbi-input-text" id="photondns_qfilter" style="max-width:300px"
 		placeholder="<%:Filter by domain / client / route...%>" />
@@ -26,6 +35,7 @@
 		cache: '#2ca02c', stale: '#17a2b8', hosts: '#7952b3', blocked: '#d43f3a',
 		redirect: '#6c757d', servfail: '#8b0000', local: '#e67e22', main: '#0d6efd'
 	};
+	var PROTO_COLORS = { udp: '#607d8b', tcp: '#00838f', doh: '#5e35b1' };
 
 	function esc(s) {
 		return String(s == null ? '' : s)
@@ -36,35 +46,72 @@
 		return '<span style="padding:0 7px; border-radius:8px; color:#fff; font-size:90%; background:' +
 			color + '">' + esc(route) + '</span>';
 	}
+	function protoBadge(proto) {
+		var p = String(proto || '').toLowerCase();
+		var color = PROTO_COLORS[p] || '#888';
+		return '<span style="padding:0 5px; border-radius:6px; color:#fff; font-size:80%; background:' +
+			color + '">' + esc(p ? p.toUpperCase() : '-') + '</span>';
+	}
 	function fmtTime(ts) {
 		var d = new Date(ts * 1000);
 		function p(n) { return ('0' + n).slice(-2); }
 		return p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
 	}
 
+	// Collapse identical consecutive queries into one row + count, as long as
+	// each repeat is within GROUP_WINDOW seconds of the previous one.
+	var GROUP_WINDOW = 3;
+	function groupEntries(list) {
+		var out = [], active = {};
+		for (var i = 0; i < list.length; i++) {
+			var e = list[i];
+			var key = (e.client||'') + '|' + (e.qname||'') + '|' + e.qtype + '|' +
+				(e.proto||'') + '|' + (e.route||'') + '|' + (e.upstream||'');
+			var gi = active[key];
+			if (gi != null && (out[gi].anchor - e.ts) <= GROUP_WINDOW) {
+				out[gi].count++;
+				out[gi].anchor = e.ts;
+			} else {
+				out.push({ e: e, count: 1, anchor: e.ts });
+				active[key] = out.length - 1;
+			}
+		}
+		return out;
+	}
+
 	function renderTable(entries) {
 		var f = (document.getElementById('photondns_qfilter').value || '').trim().toLowerCase();
 		var html = '<table class="table cbi-section-table"><tr class="tr table-titles">' +
-			'<th class="th" style="width:70px"><%:Time%></th>' +
-			'<th class="th" style="width:120px"><%:Client%></th>' +
+			'<th class="th" style="width:64px"><%:Time%></th>' +
+			'<th class="th" style="width:110px"><%:Client%></th>' +
+			'<th class="th" style="width:48px"><%:Proto%></th>' +
 			'<th class="th"><%:Domain%></th>' +
-			'<th class="th" style="width:70px"><%:Type%></th>' +
-			'<th class="th" style="width:90px"><%:Route%></th>' +
+			'<th class="th" style="width:56px"><%:Type%></th>' +
+			'<th class="th" style="width:74px"><%:Route%></th>' +
 			'<th class="th"><%:Upstream%></th>' +
-			'<th class="th" style="width:80px; text-align:right"><%:Time (ms)%></th></tr>';
-		var shown = 0;
+			'<th class="th" style="width:66px; text-align:right"><%:ms%></th></tr>';
+		var filtered = [];
 		for (var i = 0; i < entries.length; i++) {
 			var e = entries[i];
 			if (f && !((e.qname || '').toLowerCase().indexOf(f) >= 0 ||
 				(e.client || '').toLowerCase().indexOf(f) >= 0 ||
 				(e.route || '').toLowerCase().indexOf(f) >= 0 ||
+				(e.proto || '').toLowerCase().indexOf(f) >= 0 ||
 				(e.upstream || '').toLowerCase().indexOf(f) >= 0))
 				continue;
+			filtered.push(e);
+		}
+		var groups = groupEntries(filtered);
+		var shown = 0;
+		for (var g = 0; g < groups.length; g++) {
 			if (++shown > 500) break;
+			var e = groups[g].e, n = groups[g].count;
+			var cnt = n > 1 ? ' <span class="qcount">(' + n + ')</span>' : '';
 			html += '<tr class="tr">' +
 				'<td class="td">' + fmtTime(e.ts) + '</td>' +
 				'<td class="td">' + esc(e.client) + '</td>' +
-				'<td class="td" style="word-break:break-all">' + esc(e.qname) + '</td>' +
+				'<td class="td">' + protoBadge(e.proto) + '</td>' +
+				'<td class="td qname">' + esc(e.qname) + cnt + '</td>' +
 				'<td class="td">' + esc(QTYPES[e.qtype] || e.qtype) + '</td>' +
 				'<td class="td">' + routeBadge(e.route) + '</td>' +
 				'<td class="td">' + esc(e.upstream || '-') + '</td>' +
@@ -72,7 +119,7 @@
 					(e.rtt_ms < 0.1 ? '&lt;0.1' : esc(e.rtt_ms)) + '</td></tr>';
 		}
 		if (shown === 0)
-			html += '<tr class="tr"><td class="td" colspan="7" style="opacity:.6"><%:(no entries)%></td></tr>';
+			html += '<tr class="tr"><td class="td" colspan="8" style="opacity:.6"><%:(no entries)%></td></tr>';
 		html += '</table>';
 		return html;
 	}
