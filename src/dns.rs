@@ -225,7 +225,6 @@ fn edns_udp_size(buf: &[u8], mut pos: usize, extra_questions: usize) -> u16 {
 #[derive(Debug)]
 pub struct RrInfo {
     pub rtype: u16,
-    pub class: u16, // for OPT this is the UDP payload size
     pub ttl: u32,
     pub ttl_offset: usize,
     pub rdata_start: usize,
@@ -250,7 +249,6 @@ fn walk_rrs(buf: &[u8], mut pos: usize, extra_questions: usize) -> Option<Vec<Rr
         }
         pos = skip_name(buf, pos)?;
         let rtype = u16_at(buf, pos)?;
-        let class = u16_at(buf, pos + 2)?;
         let ttl = u32_at(buf, pos + 4)?;
         let rdlen = u16_at(buf, pos + 8)? as usize;
         let rdata_start = pos + 10;
@@ -266,7 +264,6 @@ fn walk_rrs(buf: &[u8], mut pos: usize, extra_questions: usize) -> Option<Vec<Rr
         };
         out.push(RrInfo {
             rtype,
-            class,
             ttl,
             ttl_offset: pos + 4,
             rdata_start,

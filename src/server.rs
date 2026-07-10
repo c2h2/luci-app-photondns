@@ -78,7 +78,7 @@ fn unix_now() -> u64 {
 
 /// Clamp TTLs, extract cache metadata and store the response.
 /// Returns false when the response is not cacheable (nothing was stored).
-fn cache_store(ctx: &Ctx, key: cache::CacheKey, resp: &mut Vec<u8>, question_end: usize) -> bool {
+fn cache_store(ctx: &Ctx, key: cache::CacheKey, resp: &mut [u8], question_end: usize) -> bool {
     let Some(cache) = &ctx.cache else {
         return false;
     };
@@ -103,7 +103,7 @@ fn cache_store(ctx: &Ctx, key: cache::CacheKey, resp: &mut Vec<u8>, question_end
     cache.insert(
         key,
         CacheEntry {
-            data: resp.clone(),
+            data: resp.to_owned(),
             ttl_offsets: info.ttl_offsets.into_boxed_slice(),
             question_len: (question_end - dns::HEADER_LEN) as u16,
             stored_at: Instant::now(),

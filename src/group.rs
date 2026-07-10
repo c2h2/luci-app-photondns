@@ -125,7 +125,7 @@ impl Group {
     }
 
     /// Order upstreams for attempt sequence according to the strategy.
-    fn order(&self, v: &mut Vec<Arc<Upstream>>) {
+    fn order(&self, v: &mut [Arc<Upstream>]) {
         match self.strategy {
             Strategy::Race | Strategy::Fastest | Strategy::Parallel => {
                 v.sort_by_key(|u| u.state.ewma_us_or_default());

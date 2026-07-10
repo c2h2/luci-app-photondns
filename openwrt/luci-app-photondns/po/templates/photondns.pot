@@ -262,6 +262,18 @@ msgstr ""
 msgid "How long pooled TCP/DoT/DoH connections stay open"
 msgstr ""
 
+msgid "UDP worker sockets"
+msgstr ""
+
+msgid "Parallel UDP sockets per listen address (SO_REUSEPORT); 0 = automatic (one per CPU core, up to 4)"
+msgstr ""
+
+msgid "TCP client idle timeout (s)"
+msgstr ""
+
+msgid "Close idle client TCP/DoH connections after this many seconds"
+msgstr ""
+
 msgid "Strategy"
 msgstr ""
 
@@ -368,6 +380,18 @@ msgid "Prefetch popular entries"
 msgstr ""
 
 msgid "Refresh frequently used entries shortly before they expire, so they never go stale"
+msgstr ""
+
+msgid "Prefetch margin (s)"
+msgstr ""
+
+msgid "Start refreshing a popular entry when its remaining TTL falls below this many seconds"
+msgstr ""
+
+msgid "Prefetch minimum hits"
+msgstr ""
+
+msgid "Minimum lookups an entry needs before it qualifies for prefetch"
 msgstr ""
 
 msgid "Persist cache to disk"
@@ -700,6 +724,18 @@ msgstr ""
 msgid "Block all IPv6"
 msgstr ""
 
+msgid "Block special-use TLDs"
+msgstr ""
+
+msgid "Answer NXDOMAIN for special-use TLDs (.local, .lan, .internal, ...) so mDNS noise never reaches public resolvers"
+msgstr ""
+
+msgid "Block private PTR lookups"
+msgstr ""
+
+msgid "Answer NXDOMAIN for reverse (PTR) lookups of private / link-local address space instead of leaking them upstream"
+msgstr ""
+
 msgid "Prewarm popular domains"
 msgstr ""
 
@@ -812,6 +848,12 @@ msgid "LAN record TTL (s)"
 msgstr ""
 
 msgid "Answer TTL for LAN forward/reverse records."
+msgstr ""
+
+msgid "Hosts file TTL (s)"
+msgstr ""
+
+msgid "Answer TTL for entries from the hosts rule file (Rules page)"
 msgstr ""
 
 msgid "LAN Hosts"

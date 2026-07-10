@@ -178,6 +178,14 @@ o:value("block_if_ipv4", translate("Block if IPv4 exists"))
 o:value("block_all", translate("Block all IPv6"))
 o.default = "allow"
 
+o = s:taboption("basic", Flag, "block_special", translate("Block special-use TLDs"),
+	translate("Answer NXDOMAIN for special-use TLDs (.local, .lan, .internal, ...) so mDNS noise never reaches public resolvers"))
+o.default = "1"
+
+o = s:taboption("basic", Flag, "block_private_ptr", translate("Block private PTR lookups"),
+	translate("Answer NXDOMAIN for reverse (PTR) lookups of private / link-local address space instead of leaking them upstream"))
+o.default = "1"
+
 o = s:taboption("basic", Flag, "prewarm", translate("Prewarm popular domains"),
 	translate("Keep a list of domains (default: YouTube/Google) always resolved so a first visit is never a slow cold miss. Edit the list under Rules."))
 o.default = "1"
@@ -214,6 +222,11 @@ o = s:taboption("basic", Value, "lan_ttl", translate("LAN record TTL (s)"),
 o.datatype = "and(uinteger,min(1),max(86400))"
 o.default = "60"
 o:depends("lan_hosts", "1")
+
+o = s:taboption("basic", Value, "hosts_ttl", translate("Hosts file TTL (s)"),
+	translate("Answer TTL for entries from the hosts rule file (Rules page)"))
+o.datatype = "and(uinteger,min(1),max(86400))"
+o.default = "300"
 
 o = s:taboption("basic", Value, "query_log_size", translate("Query log size"),
 	translate("Number of recent queries kept in memory for the Query Log page; 0 disables it"))
@@ -308,7 +321,7 @@ o:value("fastest", translate("fastest (lowest EWMA)"))
 o:value("parallel", translate("parallel (all at once)"))
 o:value("sequential", translate("sequential (ordered)"))
 o:value("random", translate("random"))
-o.default = "race"
+o.default = "parallel"
 
 o = s:taboption("failover", Value, "hedge_delay", translate("Max hedge delay (ms)"),
 	translate("Upper bound before racing the next upstream; actual delay adapts to ~2x the best upstream latency"))
@@ -360,6 +373,16 @@ o.default = "0"
 o = s:taboption("failover", Value, "idle_timeout", translate("Connection idle timeout (s)"),
 	translate("How long pooled TCP/DoT/DoH connections stay open"))
 o.datatype = "and(uinteger,min(5))"
+o.default = "30"
+
+o = s:taboption("failover", Value, "udp_sockets", translate("UDP worker sockets"),
+	translate("Parallel UDP sockets per listen address (SO_REUSEPORT); 0 = automatic (one per CPU core, up to 4)"))
+o.datatype = "and(uinteger,min(0),max(16))"
+o.default = "0"
+
+o = s:taboption("failover", Value, "tcp_idle_timeout", translate("TCP client idle timeout (s)"),
+	translate("Close idle client TCP/DoH connections after this many seconds"))
+o.datatype = "and(uinteger,min(5),max(3600))"
 o.default = "30"
 
 ---- cache ----
@@ -424,6 +447,18 @@ o = s:taboption("cache", Flag, "prefetch", translate("Prefetch popular entries")
 	translate("Refresh frequently used entries shortly before they expire, so they never go stale"))
 o.default = "1"
 o:depends("cache", "1")
+
+o = s:taboption("cache", Value, "prefetch_margin", translate("Prefetch margin (s)"),
+	translate("Start refreshing a popular entry when its remaining TTL falls below this many seconds"))
+o.datatype = "and(uinteger,min(1),max(3600))"
+o.default = "10"
+o:depends("prefetch", "1")
+
+o = s:taboption("cache", Value, "prefetch_min_hits", translate("Prefetch minimum hits"),
+	translate("Minimum lookups an entry needs before it qualifies for prefetch"))
+o.datatype = "and(uinteger,min(1),max(1000))"
+o.default = "2"
+o:depends("prefetch", "1")
 
 o = s:taboption("cache", Flag, "dump_cache", translate("Persist cache to disk"),
 	translate("Save the cache on shutdown (and optionally at intervals); restore it on startup"))

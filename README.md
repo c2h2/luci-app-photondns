@@ -59,6 +59,27 @@ public resolver.
 
 ## Recent changes (July 2026)
 
+- **Cache lookup page** — new `/cachekeys` API and LuCI page: type a domain
+  with live autocomplete against cached names, then a cache-first resolve
+  shows the answers, route, TTL left and timing.
+- **LAN client names** — resolve DHCP clients by name (learned from
+  `dhcp.leases`, refreshed live) plus a manual pin file for devices that don't
+  advertise one; forward and reverse (PTR), bare and under a `.lan`-style
+  suffix, no dnsmasq involvement.
+- **Prewarm list** — keep a list of domains (default: YouTube/Google) always
+  resolved so a first visit is never a cold miss; editable in LuCI.
+- **IPv6 (AAAA) modes** — `routing.aaaa_mode`: `allow`, `block_if_ipv4`
+  (suppress AAAA only when the name also has an A record) or `block_all`.
+- **TTL multiplier** — `cache.ttl_multiply` scales upstream TTLs before the
+  min/max clamp (e.g. 5× turns TTL 90 into 450).
+- **Hot-path perf** — FxHash on the lookup path, fewer copies, `recvmmsg`
+  UDP batching, optional mimalloc (`--features fastalloc`; big win on musl).
+- **Query log** — protocol column (UDP/TCP/DoH), denser table, repeated
+  queries grouped within 3 s; memory-only daemon logging (empty `log.file`).
+- **Advanced knobs in LuCI** — `udp_sockets`, `tcp_idle_timeout`,
+  `prefetch_margin`, `prefetch_min_hits`, `hosts_ttl`, `block_special`,
+  `block_private_ptr` are now exposed end-to-end (UCI, init.d, both LuCI
+  apps); default cache size is 65536 entries everywhere.
 - **DoH server** — new `[server] doh_listen` serves RFC 8484
   (GET `?dns=` / POST `application/dns-message`) alongside UDP/TCP.
   Two hosting modes: plain HTTP behind a TLS reverse proxy
@@ -98,11 +119,14 @@ public resolver.
   plain-HTTP behind a reverse proxy (Caddy/nginx) or native TLS with a PEM
   cert. Upstreams: `udp://`, `tcp://`, `tls://` (DoT), `https://` (DoH) with
   bootstrap resolution
-- Cache: configurable size, TTL clamping, **serve-stale**, **prefetch**,
-  persistence across restarts
+- Cache: configurable size (default 65536 entries), TTL clamping + multiplier,
+  **serve-stale**, **prefetch**, **prewarm list**, persistence across
+  restarts, live cache lookup page
 - Failover strategies: `race` (default), `fastest`, `parallel`,
   `sequential`, `random`; adaptive hedge delay, circuit breaker, health prober
 - Rules: hosts, block (NXDOMAIN), redirect, local-domain routing
+- **LAN client names** from DHCP leases + pin file (forward + reverse PTR),
+  IPv6 (AAAA) handling modes: allow / block-if-IPv4 / block-all
 - **China / non-China split DNS** — one click downloads the
   dnsmasq-china-list (~110k domains); mainland domains resolve via your local
   group, everything else via the main group
@@ -111,6 +135,7 @@ public resolver.
 - Special-TLD (`.local`/`.lan`) and private-PTR protection, optional
   HTTPS/SVCB type-65 rejection
 - HTTP JSON API: `/stats`, `/flush`, `/log`, `/health`, `/version`,
+  `/cachekeys` (live cache autocomplete),
   `/resolve?name=…&type=…` (dig-like diagnostics with route + upstream)
 - Bilingual LuCI app (English / 简体中文): live dashboard, settings, rule
   editor, log viewer; dnsmasq takeover and firewall DNS hijack options
@@ -140,7 +165,7 @@ tcp = true
 doh_listen = "127.0.0.1:8054"   # "" = off; add doh_cert/doh_key for native TLS
 
 [cache]
-size = 8192
+size = 65536
 serve_stale = true
 
 [[group]]

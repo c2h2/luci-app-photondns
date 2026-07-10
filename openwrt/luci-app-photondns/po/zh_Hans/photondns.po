@@ -265,6 +265,18 @@ msgstr "连接空闲超时（秒）"
 msgid "How long pooled TCP/DoT/DoH connections stay open"
 msgstr "TCP/DoT/DoH 连接池中连接的保持时间"
 
+msgid "UDP worker sockets"
+msgstr "UDP 工作套接字数"
+
+msgid "Parallel UDP sockets per listen address (SO_REUSEPORT); 0 = automatic (one per CPU core, up to 4)"
+msgstr "每个监听地址的并行 UDP 套接字数（SO_REUSEPORT）；0 = 自动（每个 CPU 核心一个，最多 4 个）"
+
+msgid "TCP client idle timeout (s)"
+msgstr "TCP 客户端空闲超时（秒）"
+
+msgid "Close idle client TCP/DoH connections after this many seconds"
+msgstr "客户端 TCP/DoH 连接空闲超过该秒数后关闭"
+
 msgid "Strategy"
 msgstr "策略"
 
@@ -372,6 +384,18 @@ msgstr "预取热门条目"
 
 msgid "Refresh frequently used entries shortly before they expire, so they never go stale"
 msgstr "在到期前主动刷新高频条目，使其永不过期"
+
+msgid "Prefetch margin (s)"
+msgstr "预取提前量（秒）"
+
+msgid "Start refreshing a popular entry when its remaining TTL falls below this many seconds"
+msgstr "热门条目剩余 TTL 低于该秒数时开始后台刷新"
+
+msgid "Prefetch minimum hits"
+msgstr "预取最少命中次数"
+
+msgid "Minimum lookups an entry needs before it qualifies for prefetch"
+msgstr "条目至少被查询该次数后才会参与预取"
 
 msgid "Persist cache to disk"
 msgstr "缓存持久化"
@@ -704,6 +728,18 @@ msgstr "存在 IPv4 时拦截"
 msgid "Block all IPv6"
 msgstr "拦截全部 IPv6"
 
+msgid "Block special-use TLDs"
+msgstr "拦截特殊用途顶级域"
+
+msgid "Answer NXDOMAIN for special-use TLDs (.local, .lan, .internal, ...) so mDNS noise never reaches public resolvers"
+msgstr "对特殊用途顶级域（.local、.lan、.internal 等）返回 NXDOMAIN，避免 mDNS 噪音到达公共解析器"
+
+msgid "Block private PTR lookups"
+msgstr "拦截私有地址 PTR 查询"
+
+msgid "Answer NXDOMAIN for reverse (PTR) lookups of private / link-local address space instead of leaking them upstream"
+msgstr "对私有/链路本地地址段的反向（PTR）查询返回 NXDOMAIN，而不是泄漏给上游"
+
 # Prewarm settings
 msgid "Prewarm popular domains"
 msgstr "预热热门域名"
@@ -825,6 +861,12 @@ msgstr "局域网记录 TTL（秒）"
 
 msgid "Answer TTL for LAN forward/reverse records."
 msgstr "局域网正向/反向记录的应答 TTL。"
+
+msgid "Hosts file TTL (s)"
+msgstr "Hosts 文件 TTL（秒）"
+
+msgid "Answer TTL for entries from the hosts rule file (Rules page)"
+msgstr "Hosts 规则文件（规则页面）中条目的应答 TTL"
 
 msgid "LAN Hosts"
 msgstr "局域网主机"

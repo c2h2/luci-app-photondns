@@ -29,6 +29,7 @@ BENCH="$DIR/target/$TARGET/release/photonbench"
 RBENCH="$DIR/target/$TARGET/release/photonrbench"
 APP="$DIR/openwrt/luci-app-photondns"
 CAPP="$DIR/openwrt/luci-app-photondns-compat"
+PKGD="$DIR/openwrt/photondns"
 
 [ -f "$BIN" ] || { echo "binary missing - run: cargo zigbuild --release --target $TARGET"; exit 1; }
 echo "==> deploying $TARGET build to $HOST"
@@ -69,9 +70,10 @@ fi
 $SCP "$BIN" "$HOST:/usr/bin/photondns"
 [ -f "$BENCH" ] && $SCP "$BENCH" "$HOST:/usr/bin/photonbench"
 [ -f "$RBENCH" ] && $SCP "$RBENCH" "$HOST:/usr/bin/photonrbench"
-$SCP "$APP/root/etc/init.d/photondns" "$HOST:/etc/init.d/photondns"
-$SCP "$APP/root/usr/bin/photondns-chinalist" "$HOST:/usr/bin/photondns-chinalist"
-$SCP "$APP/root/usr/bin/photondns-adlist" "$HOST:/usr/bin/photondns-adlist"
+$SCP "$PKGD/root/etc/init.d/photondns" "$HOST:/etc/init.d/photondns"
+$SCP "$PKGD/root/usr/bin/photondns-chinalist" "$HOST:/usr/bin/photondns-chinalist"
+$SCP "$PKGD/root/usr/bin/photondns-adlist" "$HOST:/usr/bin/photondns-adlist"
+$SCP "$PKGD/root/etc/uci-defaults/40_photondns" "$HOST:/tmp/40_photondns"
 $SCP "$APP/root/etc/uci-defaults/40_luci-photondns" "$HOST:/tmp/40_luci-photondns"
 
 # ---- flavor-specific LuCI frontend ----
@@ -105,6 +107,10 @@ if [ -n "$I18N_PO" ] && command -v python3 >/dev/null && [ -f "$I18N_PO" ]; then
 	python3 "$DIR/tools/po2lmo.py" "$I18N_PO" /tmp/photondns.zh-cn.lmo
 	$SSH "$HOST" "mkdir -p /usr/lib/lua/luci/i18n"
 	$SCP /tmp/photondns.zh-cn.lmo "$HOST:/usr/lib/lua/luci/i18n/photondns.zh-cn.lmo"
+	# the compat app's i18n domain is photondns-compat - old LuCI looks the
+	# catalog up under that name, so ship it under both
+	[ "$FLAVOR" = "compat" ] && \
+		$SCP /tmp/photondns.zh-cn.lmo "$HOST:/usr/lib/lua/luci/i18n/photondns-compat.zh-cn.lmo"
 	rm -f /tmp/photondns.zh-cn.lmo
 fi
 
@@ -119,11 +125,12 @@ chmod +x /usr/bin/photondns /usr/bin/photondns-chinalist /usr/bin/photondns-adli
 if [ ! -f /etc/config/photondns ]; then
 	touch /etc/config/photondns
 fi
+sh /tmp/40_photondns && rm -f /tmp/40_photondns
 sh /tmp/40_luci-photondns && rm -f /tmp/40_luci-photondns
 EOF
 
 if $SSH "$HOST" "[ ! -s /etc/config/photondns ]"; then
-	$SCP "$APP/root/etc/config/photondns" "$HOST:/etc/config/photondns"
+	$SCP "$PKGD/root/etc/config/photondns" "$HOST:/etc/config/photondns"
 fi
 
 $SSH "$HOST" "/etc/init.d/rpcd restart; /etc/init.d/uhttpd restart 2>/dev/null; rm -f /tmp/luci-indexcache* /tmp/luci-modulecache/* 2>/dev/null; /etc/init.d/photondns enable; /etc/init.d/photondns start"

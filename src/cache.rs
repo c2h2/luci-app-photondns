@@ -100,7 +100,7 @@ pub struct DnsCache {
 
 impl DnsCache {
     pub fn new(capacity: usize) -> Self {
-        let per_shard = (capacity + SHARDS - 1) / SHARDS;
+        let per_shard = capacity.div_ceil(SHARDS);
         let shards = (0..SHARDS)
             .map(|_| {
                 Mutex::new(Shard {

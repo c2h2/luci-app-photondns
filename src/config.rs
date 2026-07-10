@@ -256,7 +256,7 @@ fn default_doh_path() -> String {
     "/dns-query".into()
 }
 fn default_cache_size() -> usize {
-    8192
+    65536
 }
 fn default_max_ttl() -> u32 {
     86400

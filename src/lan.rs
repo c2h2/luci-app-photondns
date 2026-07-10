@@ -199,17 +199,6 @@ pub fn ptr_to_ip(qname: &str) -> Option<IpAddr> {
 mod tests {
     use super::*;
 
-    fn cfg(suffix: &str) -> LanCfg {
-        LanCfg {
-            enabled: true,
-            leases_file: String::new(),
-            extra_hosts_file: String::new(),
-            suffix: suffix.to_string(),
-            refresh_interval: 30,
-            ttl: 60,
-        }
-    }
-
     #[test]
     fn lease_parsing_and_suffix() {
         let mut b = Builder::new("lan");

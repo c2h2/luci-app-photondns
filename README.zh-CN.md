@@ -51,6 +51,26 @@ cargo build --release
 
 ## 近期更新（2026 年 7 月）
 
+- **缓存查询页** — 新增 `/cachekeys` API 与 LuCI 页面：输入域名时
+  按已缓存名称实时自动补全，缓存优先解析并显示应答、路由、
+  剩余 TTL 与耗时。
+- **局域网客户端名称解析** — 从 DHCP 租约（`dhcp.leases`，定时刷新）
+  学习设备名，并支持手动固定列表；正反向（PTR）均可解析，
+  裸名与 `.lan` 后缀名同时生效，不依赖 dnsmasq。
+- **预热列表** — 保持一组域名（默认 YouTube/Google）始终处于已解析
+  状态，首次访问不再冷未命中；可在 LuCI 中编辑。
+- **IPv6（AAAA）处理模式** — `routing.aaaa_mode`：`allow`、
+  `block_if_ipv4`（仅当同名存在 A 记录时拦截 AAAA）或 `block_all`。
+- **TTL 倍增器** — `cache.ttl_multiply` 在最小/最大钳制前按倍数放大
+  上游 TTL（如 5 倍把 TTL 90 变成 450）。
+- **热路径性能** — 查询路径改用 FxHash、减少内存拷贝、`recvmmsg`
+  批量收包、可选 mimalloc（`--features fastalloc`，musl 上收益显著）。
+- **查询日志** — 新增协议列（UDP/TCP/DoH）、表格更紧凑、3 秒内重复
+  查询自动分组；`log.file` 留空可只记内存日志。
+- **高级参数进 LuCI** — `udp_sockets`、`tcp_idle_timeout`、
+  `prefetch_margin`、`prefetch_min_hits`、`hosts_ttl`、`block_special`、
+  `block_private_ptr` 全链路（UCI、init.d、两版 LuCI）可配；
+  缓存默认容量统一为 65536 条。
 - **DoH 服务端** — 新增 `[server] doh_listen`，按 RFC 8484 提供
   DNS-over-HTTPS（GET `?dns=` / POST `application/dns-message`）。
   两种部署方式：纯 HTTP 挂在反向代理后面
@@ -83,11 +103,14 @@ cargo build --release
   反向代理（Caddy/nginx）后面或用 PEM 证书原生 TLS。上游支持 `udp://`、
   `tcp://`、`tls://`（DoT）、`https://`（DoH），DoT/DoH 域名自动
   bootstrap 解析
-- 缓存：容量可配、TTL 钳制、**过期兜底（serve-stale）**、**热点预取**、
-  重启后持久化
+- 缓存：容量可配（默认 65536 条）、TTL 钳制与倍增、**过期兜底
+  （serve-stale）**、**热点预取**、**预热列表**、重启后持久化、
+  实时缓存查询页
 - 故障切换策略：`race`（默认）、`fastest`、`parallel`、`sequential`、
   `random`；自适应对冲延迟、熔断器、主动健康探测
 - 规则：hosts、拦截（NXDOMAIN）、重定向、本地域名分流
+- **局域网客户端名称**（DHCP 租约 + 固定列表，正反向 PTR），
+  IPv6（AAAA）处理模式：放行 / 有 IPv4 则拦截 / 全部拦截
 - **国内 / 国外分流** — 一键下载 dnsmasq-china-list（约 11 万域名），
   大陆域名走本地组，其余走主组
 - **广告拦截**，列表自动更新（anti-AD、AdRules、hosts 格式）
@@ -95,6 +118,7 @@ cargo build --release
 - 特殊 TLD（`.local`/`.lan`）与内网 PTR 保护，可选拒绝 HTTPS/SVCB
   type-65 查询
 - HTTP JSON API：`/stats`、`/flush`、`/log`、`/health`、`/version`、
+  `/cachekeys`（缓存实时自动补全）、
   `/resolve?name=…&type=…`（dig 风格诊断，显示路由与胜出上游）
 - 双语 LuCI 应用（English / 简体中文）：实时仪表盘、设置、规则编辑器、
   日志查看器；支持 dnsmasq 接管与防火墙 DNS 劫持
@@ -124,7 +148,7 @@ tcp = true
 doh_listen = "127.0.0.1:8054"   # "" 表示关闭；配 doh_cert/doh_key 则原生 TLS
 
 [cache]
-size = 8192
+size = 65536
 serve_stale = true
 
 [[group]]

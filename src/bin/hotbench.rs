@@ -9,7 +9,6 @@
 //!
 //! usage: hotbench <china_list.txt> <query_names.txt> [iters]
 
-use rustc_hash::FxHashSet;
 use std::collections::HashSet;
 use std::hash::BuildHasher;
 use std::time::Instant;

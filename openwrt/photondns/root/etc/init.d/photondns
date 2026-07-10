@@ -15,6 +15,8 @@ get_config() {
 	config_get listen_port $1 listen_port 15533
 	config_get udp $1 udp 1
 	config_get tcp $1 tcp 1
+	config_get udp_sockets $1 udp_sockets 0
+	config_get tcp_idle_timeout $1 tcp_idle_timeout 30
 	config_get doh $1 doh 0
 	config_get doh_port $1 doh_port 8054
 	config_get doh_path $1 doh_path "/dns-query"
@@ -26,7 +28,7 @@ get_config() {
 	config_get redirect $1 redirect 0
 	config_get dns_hijack $1 dns_hijack 0
 	config_get cache $1 cache 1
-	config_get cache_size $1 cache_size 8192
+	config_get cache_size $1 cache_size 65536
 	config_get min_ttl $1 min_ttl 0
 	config_get max_ttl $1 max_ttl 86400
 	config_get ttl_multiply $1 ttl_multiply 1.0
@@ -35,9 +37,11 @@ get_config() {
 	config_get stale_ttl $1 stale_ttl 86400
 	config_get stale_client_ttl $1 stale_client_ttl 30
 	config_get prefetch $1 prefetch 1
+	config_get prefetch_margin $1 prefetch_margin 10
+	config_get prefetch_min_hits $1 prefetch_min_hits 2
 	config_get dump_cache $1 dump_cache 1
 	config_get dump_interval $1 dump_interval 0
-	config_get strategy $1 strategy "race"
+	config_get strategy $1 strategy "parallel"
 	config_get hedge_delay $1 hedge_delay 250
 	config_get query_timeout $1 query_timeout 5000
 	config_get health_check_interval $1 health_check_interval 10
@@ -50,14 +54,17 @@ get_config() {
 	config_get idle_timeout $1 idle_timeout 30
 	config_get reject_type65 $1 reject_type65 0
 	config_get aaaa_mode $1 aaaa_mode "allow"
+	config_get hosts_ttl $1 hosts_ttl 300
+	config_get block_special $1 block_special 1
+	config_get block_private_ptr $1 block_private_ptr 1
 	config_get prewarm $1 prewarm 1
 	config_get prewarm_interval $1 prewarm_interval 3000
-	config_get lan_hosts $1 lan_hosts 0
+	config_get lan_hosts $1 lan_hosts 1
 	config_get lan_suffix $1 lan_suffix "lan"
 	config_get lan_leases $1 lan_leases "/tmp/dhcp.leases"
 	config_get lan_refresh $1 lan_refresh 30
 	config_get lan_ttl $1 lan_ttl 60
-	config_get china_list $1 china_list 0
+	config_get china_list $1 china_list 1
 	config_get adblock $1 adblock 0
 	config_get query_log_size $1 query_log_size 5000
 	config_get auto_update $1 auto_update 0
@@ -118,6 +125,8 @@ generate_config() {
 	listen = ["$listen_address:$listen_port"]
 	udp = $(bool_str $udp)
 	tcp = $(bool_str $tcp)
+	udp_sockets = $udp_sockets
+	tcp_idle_timeout = $tcp_idle_timeout
 	doh_listen = "$doh_listen"
 	doh_path = "$doh_path"
 	doh_cert = "$doh_cert"
@@ -134,6 +143,8 @@ generate_config() {
 	stale_ttl = $stale_ttl
 	stale_client_ttl = $stale_client_ttl
 	prefetch = $(bool_str $prefetch)
+	prefetch_margin = $prefetch_margin
+	prefetch_min_hits = $prefetch_min_hits
 	dump_file = "$dump_file"
 	dump_interval = $dump_interval
 
@@ -159,8 +170,11 @@ generate_config() {
 	china_list_file = "$china_list_file"
 	ad_list_file = "$ad_list_file"
 	redirect_file = "$RULE_DIR/redirect.txt"
+	hosts_ttl = $hosts_ttl
 	reject_type65 = $(bool_str $reject_type65)
 	aaaa_mode = "$aaaa_mode"
+	block_special = $(bool_str $block_special)
+	block_private_ptr = $(bool_str $block_private_ptr)
 
 	[prewarm]
 	domains_file = "$prewarm_file"

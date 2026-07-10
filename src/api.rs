@@ -42,7 +42,7 @@ fn urldecode(s: &str) -> String {
     out
 }
 
-fn query_param<'a>(path: &'a str, key: &str) -> Option<String> {
+fn query_param(path: &str, key: &str) -> Option<String> {
     let q = path.split_once('?')?.1;
     for pair in q.split('&') {
         if let Some((k, v)) = pair.split_once('=') {

@@ -700,8 +700,7 @@ async fn read_h1_response(s: &mut Box<dyn Io>) -> Result<(Vec<u8>, bool)> {
     let keep = !head_text.contains("connection: close");
     let content_length = head_text.lines().find_map(|l| {
         l.strip_prefix("content-length:")
-            .map(|v| v.trim().parse::<usize>().ok())
-            .flatten()
+            .and_then(|v| v.trim().parse::<usize>().ok())
     });
     let chunked = head_text.contains("transfer-encoding: chunked");
     if let Some(len) = content_length {

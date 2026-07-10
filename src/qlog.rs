@@ -32,6 +32,7 @@ impl QueryLog {
         }
     }
 
+    #[cfg(test)]
     pub fn enabled(&self) -> bool {
         self.cap > 0
     }
@@ -97,6 +98,7 @@ impl QueryLog {
             .collect()
     }
 
+    #[cfg(test)]
     pub fn len(&self) -> usize {
         self.buf.lock().len()
     }

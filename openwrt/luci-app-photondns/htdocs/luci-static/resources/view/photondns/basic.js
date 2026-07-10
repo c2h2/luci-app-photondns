@@ -230,6 +230,14 @@ return view.extend({
 		o.value('block_all', _('Block all IPv6'));
 		o.default = 'allow';
 
+		o = s.taboption('basic', form.Flag, 'block_special', _('Block special-use TLDs'),
+			_('Answer NXDOMAIN for special-use TLDs (.local, .lan, .internal, ...) so mDNS noise never reaches public resolvers'));
+		o.default = '1';
+
+		o = s.taboption('basic', form.Flag, 'block_private_ptr', _('Block private PTR lookups'),
+			_('Answer NXDOMAIN for reverse (PTR) lookups of private / link-local address space instead of leaking them upstream'));
+		o.default = '1';
+
 		o = s.taboption('basic', form.Flag, 'prewarm', _('Prewarm popular domains'),
 			_('Keep a list of domains (default: YouTube/Google) always resolved so a first visit is never a slow cold miss. Edit the list under Rules.'));
 		o.default = true;
@@ -266,6 +274,11 @@ return view.extend({
 		o.datatype = 'and(uinteger,min(1),max(86400))';
 		o.default = '60';
 		o.depends('lan_hosts', '1');
+
+		o = s.taboption('basic', form.Value, 'hosts_ttl', _('Hosts file TTL (s)'),
+			_('Answer TTL for entries from the hosts rule file (Rules page)'));
+		o.datatype = 'and(uinteger,min(1),max(86400))';
+		o.default = '300';
 
 		o = s.taboption('basic', form.Value, 'query_log_size', _('Query log size'),
 			_('Number of recent queries kept in memory for the Query Log page; 0 disables it'));
@@ -356,7 +369,7 @@ return view.extend({
 		o.value('parallel', _('parallel (all at once)'));
 		o.value('sequential', _('sequential (ordered)'));
 		o.value('random', _('random'));
-		o.default = 'race';
+		o.default = 'parallel';
 
 		o = s.taboption('failover', form.Value, 'hedge_delay', _('Max hedge delay (ms)'),
 			_('Upper bound before racing the next upstream; actual delay adapts to ~2x the best upstream latency'));
@@ -408,6 +421,16 @@ return view.extend({
 		o = s.taboption('failover', form.Value, 'idle_timeout', _('Connection idle timeout (s)'),
 			_('How long pooled TCP/DoT/DoH connections stay open'));
 		o.datatype = 'and(uinteger,min(5))';
+		o.default = '30';
+
+		o = s.taboption('failover', form.Value, 'udp_sockets', _('UDP worker sockets'),
+			_('Parallel UDP sockets per listen address (SO_REUSEPORT); 0 = automatic (one per CPU core, up to 4)'));
+		o.datatype = 'and(uinteger,min(0),max(16))';
+		o.default = '0';
+
+		o = s.taboption('failover', form.Value, 'tcp_idle_timeout', _('TCP client idle timeout (s)'),
+			_('Close idle client TCP/DoH connections after this many seconds'));
+		o.datatype = 'and(uinteger,min(5),max(3600))';
 		o.default = '30';
 
 		/* ---- cache ---- */
@@ -472,6 +495,18 @@ return view.extend({
 			_('Refresh frequently used entries shortly before they expire, so they never go stale'));
 		o.default = true;
 		o.depends('cache', '1');
+
+		o = s.taboption('cache', form.Value, 'prefetch_margin', _('Prefetch margin (s)'),
+			_('Start refreshing a popular entry when its remaining TTL falls below this many seconds'));
+		o.datatype = 'and(uinteger,min(1),max(3600))';
+		o.default = '10';
+		o.depends('prefetch', '1');
+
+		o = s.taboption('cache', form.Value, 'prefetch_min_hits', _('Prefetch minimum hits'),
+			_('Minimum lookups an entry needs before it qualifies for prefetch'));
+		o.datatype = 'and(uinteger,min(1),max(1000))';
+		o.default = '2';
+		o.depends('prefetch', '1');
 
 		o = s.taboption('cache', form.Flag, 'dump_cache', _('Persist cache to disk'),
 			_('Save the cache on shutdown (and optionally at intervals); restore it on startup'));
