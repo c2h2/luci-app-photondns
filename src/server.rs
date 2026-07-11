@@ -857,9 +857,11 @@ pub fn spawn_refresher(ctx: Arc<Ctx>, mut rx: mpsc::Receiver<RefreshJob>) {
                 let group = ctx.group_for(&job.qname, job.qtype);
                 match group.resolve(&q, &ctx.stats).await {
                     Ok((mut resp, _winner)) => {
-                        // find question_end of the *response*
+                        // find question_end of the *response*, and make sure it
+                        // answers the question we asked (name *and* type) before
+                        // storing it under job.key, which encodes both.
                         match dns::parse_query(&resp) {
-                            Some(rmeta) if rmeta.qname == job.qname => {
+                            Some(rmeta) if rmeta.qname == job.qname && rmeta.qtype == job.qtype => {
                                 if cache_store(&ctx, job.key.clone(), &mut resp, rmeta.question_end)
                                 {
                                     log::debug!("refreshed {}", job.qname);
@@ -896,7 +898,7 @@ async fn prewarm_one(ctx: &Arc<Ctx>, name: &str, qtype: u16) {
     match group.resolve(&q, &ctx.stats).await {
         Ok((mut resp, _)) => {
             if let Some(rmeta) = dns::parse_query(&resp) {
-                if rmeta.qname == name {
+                if rmeta.qname == name && rmeta.qtype == qtype {
                     cache_store(ctx, key, &mut resp, rmeta.question_end);
                 }
             }

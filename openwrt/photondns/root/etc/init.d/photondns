@@ -149,7 +149,11 @@ generate_config() {
 	dump_interval = $dump_interval
 
 	[api]
-	listen = "$listen_address:$api_port"
+	# control API is localhost-only on purpose: it is unauthenticated and can
+	# read the per-client query log and flush the cache. LuCI reaches it via
+	# rpcd on 127.0.0.1, so binding it to $listen_address would expose it to the
+	# whole LAN for no benefit.
+	listen = "127.0.0.1:$api_port"
 
 	[log]
 	level = "$log_level"
