@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=photondns
 PKG_VERSION:=0.2.3
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 
 PKG_LICENSE:=GPL-3.0-only
 PKG_MAINTAINER:=c2h2
@@ -26,9 +26,18 @@ define Package/photondns/description
   hedged-racing failover with per-upstream health tracking.
 endef
 
+define Package/photondns/conffiles
+/etc/config/photondns
+endef
+
 define Package/photondns/install
-	$(INSTALL_DIR) $(1)/usr/bin
+	$(INSTALL_DIR) $(1)/usr/bin $(1)/etc/config $(1)/etc/init.d $(1)/etc/uci-defaults
 	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/bin/photondns $(1)/usr/bin/
+	$(INSTALL_BIN) ./root/usr/bin/photondns-chinalist $(1)/usr/bin/
+	$(INSTALL_BIN) ./root/usr/bin/photondns-adlist $(1)/usr/bin/
+	$(INSTALL_CONF) ./root/etc/config/photondns $(1)/etc/config/photondns
+	$(INSTALL_BIN) ./root/etc/init.d/photondns $(1)/etc/init.d/photondns
+	$(INSTALL_BIN) ./root/etc/uci-defaults/40_photondns $(1)/etc/uci-defaults/40_photondns
 endef
 
 $(eval $(call RustBinPackage,photondns))
