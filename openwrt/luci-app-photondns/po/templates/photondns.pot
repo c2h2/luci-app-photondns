@@ -868,3 +868,6 @@ msgstr ""
 msgid "Domains kept always-resolved (one per line) so a first visit is never a slow cold miss. Default set = YouTube/Google. Enable \"Prewarm popular domains\" in Basic Settings."
 msgstr ""
 
+msgid "Free and open-source software, licensed under GPL-3.0-only."
+msgstr ""
+

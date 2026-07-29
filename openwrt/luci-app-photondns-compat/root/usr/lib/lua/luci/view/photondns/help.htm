@@ -21,6 +21,10 @@
 
 <script type="text/javascript">//<![CDATA[
 (function () {
+	// Project homepage - shown in the "Open source & license" card and the footer.
+	var PROJECT_URL = 'https://github.com/c2h2/luci-app-photondns';
+	var LICENSE = 'GPL-3.0-only';
+
 	var INTRO = {
 		en: 'A plain-language guide to how photondns works and the terms used across these settings pages. Tap a term below to jump to it, or switch language with the buttons.',
 		zh: 'photondns 工作原理及各设置页面所用术语的通俗说明。点击下方术语可跳转，或用按钮切换语言。'
@@ -37,7 +41,8 @@
 		{ en: 'IPv6/AAAA', zh: 'IPv6/AAAA' },
 		{ en: 'Prefetch', zh: '预取' }, { en: 'Prewarm', zh: '预热' },
 		{ en: 'Failover', zh: '故障切换' },
-		{ en: 'Persist', zh: '持久化' }, { en: 'Blocking', zh: '拦截' }
+		{ en: 'Persist', zh: '持久化' }, { en: 'Blocking', zh: '拦截' },
+		{ en: 'Open source', zh: '开源与许可' }
 	];
 	var ACCENTS = ['#2563eb', '#0891b2', '#7c3aed', '#059669', '#d97706', '#db2777'];
 
@@ -205,6 +210,15 @@
 		] }, zh: { t: '拦截列表 与 广告拦截', b: [
 			'photondns 可以拒绝解析某些名字（返回“不存在”），这正是基于 DNS 的广告/追踪器拦截的工作方式。此功能为可选，且默认关闭——除非你启用，否则“广告拦截”开关和拦截列表都是空的。',
 			'如果某个名字被拦截，依赖它的应用可能会不断重试并看似卡住。如果你并未拦截广告但仍然很慢，原因就在别处（通常是经慢速链路的冷缓存未命中，而非拦截）。'
+		] } },
+		{ link: PROJECT_URL, en: { t: 'Open source & license', b: [
+			'photondns and this LuCI app are free and open-source software. Everything that runs on your router - the Rust resolver, this web interface and the OpenWrt packaging - is public, so you can read exactly what it does, build it yourself, report a problem or contribute a change.',
+			'License - GNU General Public License v3.0 (GPL-3.0-only). You are free to use, study, modify and redistribute it. If you distribute a modified version you must release it under the same license and make your source available. The software comes with no warranty.',
+			'Project home - source code, releases, issue tracker and documentation:'
+		] }, zh: { t: '开源与许可证', b: [
+			'photondns 与本 LuCI 应用是自由开源软件。路由器上运行的一切——Rust 解析器、这个网页界面以及 OpenWrt 打包脚本——全部公开，你可以确切地看到它做了什么，自行编译、反馈问题或提交改进。',
+			'许可证 —— GNU 通用公共许可证第 3 版（GPL-3.0-only）。你可以自由使用、研究、修改与再分发。若分发修改后的版本，必须以相同许可证发布，并提供对应源代码。本软件不提供任何担保。',
+			'项目主页 —— 源代码、发行版本、问题追踪与文档：'
 		] } }
 	];
 
@@ -254,14 +268,22 @@
 					html += '<p style="margin:7px 0; line-height:1.6">' + esc(s.b[j]) + '</p>';
 				}
 			}
+			if (HELP[i].link) {
+				html += '<p style="margin:7px 0; line-height:1.6"><a href="' + esc(HELP[i].link) + '" ' +
+					'target="_blank" rel="noopener" style="color:' + accent + '; ' +
+					'text-decoration:none; font-weight:600">' +
+					esc(HELP[i].link.replace(/^https?:\/\//, '')) + '</a></p>';
+			}
 			html += '</div>';
 		}
 		body.innerHTML = html;
 
-		src.innerHTML = (lang === 'zh' ? '源码与文档：' : 'Source &amp; docs: ') +
-			'<a href="https://github.com/c2h2/luci-app-photondns" target="_blank" ' +
+		src.innerHTML = (lang === 'zh'
+				? '自由开源软件 · 许可证 ' + esc(LICENSE) + ' · 源码与文档：'
+				: 'Free &amp; open-source software · Licensed under ' + esc(LICENSE) + ' · Source &amp; docs: ') +
+			'<a href="' + esc(PROJECT_URL) + '" target="_blank" ' +
 			'rel="noopener" style="color:#2563eb; text-decoration:none">' +
-			'github.com/c2h2/luci-app-photondns</a>';
+			esc(PROJECT_URL.replace(/^https?:\/\//, '')) + '</a>';
 	}
 
 	function setLang(l) {

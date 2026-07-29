@@ -4,6 +4,9 @@
 'require ui';
 'require view';
 
+/* Project homepage, shown in the open-source footer below the stats. */
+const PROJECT_URL = 'https://github.com/c2h2/luci-app-photondns';
+
 const callStats = rpc.declare({
 	object: 'luci.photondns',
 	method: 'stats',
@@ -202,7 +205,19 @@ return view.extend({
 					click: ui.createHandlerFn(this, 'handleFlushCache')
 				}, _('Flush DNS Cache'))
 			]),
-			container
+			container,
+			E('div', {
+				style: 'margin:18px 0 4px 0; padding-top:12px; ' +
+					'border-top:1px solid rgba(128,128,128,.22); ' +
+					'font-size:.9rem; color:var(--fg-color-2,#888)'
+			}, [
+				document.createTextNode(
+					_('Free and open-source software, licensed under GPL-3.0-only.') + ' '),
+				E('a', {
+					href: PROJECT_URL, target: '_blank', rel: 'noopener',
+					style: 'color:#2563eb; text-decoration:none'
+				}, PROJECT_URL.replace(/^https?:\/\//, ''))
+			])
 		]);
 	},
 

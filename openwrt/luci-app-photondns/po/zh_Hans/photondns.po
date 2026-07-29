@@ -880,3 +880,6 @@ msgstr "预热"
 
 msgid "Domains kept always-resolved (one per line) so a first visit is never a slow cold miss. Default set = YouTube/Google. Enable \"Prewarm popular domains\" in Basic Settings."
 msgstr "保持始终已解析的域名（每行一个），使首次访问不会因冷未命中而变慢。默认集合 = YouTube/Google。请在基本设置中启用“预热热门域名”。"
+
+msgid "Free and open-source software, licensed under GPL-3.0-only."
+msgstr "自由开源软件，采用 GPL-3.0-only 许可证。"

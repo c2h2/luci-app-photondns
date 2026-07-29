@@ -11,6 +11,10 @@
  * field; the toggle simply re-renders with the chosen language.
  */
 
+/* Project homepage - shown in the "Open source & license" card and the footer. */
+var PROJECT_URL = 'https://github.com/c2h2/luci-app-photondns';
+var LICENSE = 'GPL-3.0-only';
+
 var HELP = [
 	{
 		id: 'what',
@@ -347,6 +351,26 @@ var HELP = [
 				'如果某个名字被拦截，依赖它的应用可能会不断重试并看似卡住。如果你并未拦截广告但仍然很慢，原因就在别处（通常是经慢速链路的冷缓存未命中，而非拦截）。'
 			]
 		}
+	},
+	{
+		id: 'about',
+		link: PROJECT_URL,
+		en: {
+			title: 'Open source & license',
+			body: [
+				'photondns and this LuCI app are free and open-source software. Everything that runs on your router - the Rust resolver, this web interface and the OpenWrt packaging - is public, so you can read exactly what it does, build it yourself, report a problem or contribute a change.',
+				'License - GNU General Public License v3.0 (GPL-3.0-only). You are free to use, study, modify and redistribute it. If you distribute a modified version you must release it under the same license and make your source available. The software comes with no warranty.',
+				'Project home - source code, releases, issue tracker and documentation:'
+			]
+		},
+		zh: {
+			title: '开源与许可证',
+			body: [
+				'photondns 与本 LuCI 应用是自由开源软件。路由器上运行的一切——Rust 解析器、这个网页界面以及 OpenWrt 打包脚本——全部公开，你可以确切地看到它做了什么，自行编译、反馈问题或提交改进。',
+				'许可证 —— GNU 通用公共许可证第 3 版（GPL-3.0-only）。你可以自由使用、研究、修改与再分发。若分发修改后的版本，必须以相同许可证发布，并提供对应源代码。本软件不提供任何担保。',
+				'项目主页 —— 源代码、发行版本、问题追踪与文档：'
+			]
+		}
 	}
 ];
 
@@ -375,7 +399,8 @@ var NAV = {
 	prewarm:           { en: 'Prewarm',      zh: '预热' },
 	failover:          { en: 'Failover',     zh: '故障切换' },
 	servestale_persist:{ en: 'Persist',      zh: '持久化' },
-	block:             { en: 'Blocking',     zh: '拦截' }
+	block:             { en: 'Blocking',     zh: '拦截' },
+	about:             { en: 'Open source',  zh: '开源与许可' }
 };
 
 /* An accent color per section, cycled, so cards read as a set but are
@@ -439,6 +464,13 @@ return view.extend({
 			var s = section[lang];
 			var accent = ACCENTS[idx % ACCENTS.length];
 			var body = s.body.map(function (t) { return bodyNode(t, accent); });
+			if (section.link)
+				body.push(E('p', { style: 'margin:7px 0; line-height:1.6' }, [
+					E('a', {
+						href: section.link, target: '_blank', rel: 'noopener',
+						style: 'color:' + accent + '; text-decoration:none; font-weight:600'
+					}, section.link.replace(/^https?:\/\//, ''))
+				]));
 			return E('div', {
 				id: 'help-' + section.id,
 				style: 'border:1px solid rgba(128,128,128,.22); border-left:4px solid ' + accent + '; ' +
@@ -480,13 +512,14 @@ return view.extend({
 				container.appendChild(card(section, idx));
 			});
 			footer.innerHTML = '';
-			footer.appendChild(document.createTextNode(
-				lang === 'zh' ? '源码与文档：' : 'Source & docs: '));
+			footer.appendChild(document.createTextNode(lang === 'zh'
+				? '自由开源软件 · 许可证 ' + LICENSE + ' · 源码与文档：'
+				: 'Free & open-source software · Licensed under ' + LICENSE + ' · Source & docs: '));
 			footer.appendChild(E('a', {
-				href: 'https://github.com/c2h2/luci-app-photondns',
+				href: PROJECT_URL,
 				target: '_blank', rel: 'noopener',
 				style: 'color:#2563eb; text-decoration:none'
-			}, 'github.com/c2h2/luci-app-photondns'));
+			}, PROJECT_URL.replace(/^https?:\/\//, '')));
 		}
 
 		function mkLangBtn(code, label) {

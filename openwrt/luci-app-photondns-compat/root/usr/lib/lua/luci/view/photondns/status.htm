@@ -19,6 +19,11 @@
 
 <div id="photondns_stats"><%:Collecting data...%></div>
 
+<div style="margin:18px 0 4px 0; padding-top:12px; border-top:1px solid rgba(128,128,128,.22); font-size:.9rem; color:#888">
+	<%:Free and open-source software, licensed under GPL-3.0-only.%>
+	<a href="https://github.com/c2h2/luci-app-photondns" target="_blank" rel="noopener" style="color:#2563eb; text-decoration:none">github.com/c2h2/luci-app-photondns</a>
+</div>
+
 <script type="text/javascript">//<![CDATA[
 (function() {
 	var statsUrl = '<%=luci.dispatcher.build_url("admin/services/photondns/api/stats")%>';
