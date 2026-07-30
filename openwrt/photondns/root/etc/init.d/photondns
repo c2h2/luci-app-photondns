@@ -287,7 +287,6 @@ start_service() {
 
 	mkdir -p $RULE_DIR
 	generate_config
-	setcron
 
 	procd_open_instance photondns
 	procd_set_param command $PROG -c $CONF
@@ -297,6 +296,36 @@ start_service() {
 	procd_set_param respawn 3600 5 0
 	procd_set_param limits nofile="65535 65535"
 	procd_close_instance
+
+	# Everything below is post-start housekeeping and none of it is a
+	# prerequisite for photondns itself: dnsmasq is a *consumer* of this
+	# resolver rather than a dependency, the cron entries only schedule list
+	# updates, and restore_dhcp_setting merely undoes a previous redirect.
+	#
+	# It used to run inline, and it cost 4.04s of every boot. procd's rcS is
+	# strictly serial -- rcS.c does `q.max_running_tasks = 1` -- so that did
+	# not just delay photondns, it delayed every service behind S75. sysntpd
+	# is S98, which meant the clock was not set until ~19s after reset.
+	#
+	# Measured on a photonicat2 with every /etc/rc.d/S* wrapped in a kmsg
+	# timestamp, same board, same build:
+	#
+	#     start_service   4.041s -> 0.084s
+	#     S98sysntpd     18.957s -> 14.513s   (when the clock gets set)
+	#     rcS finishes    ~24.4s -> 19.97s
+	#
+	# Detached rather than reordered because the cost is not one slow call we
+	# could simply move: it only shows up during boot, when dnsmasq is itself
+	# still starting. Timed by hand on a running system the same steps take
+	# ~0.35s, so this has to come off the critical path rather than be tuned.
+	photondns_post_start &
+}
+
+# Runs detached from start_service; see the note there. Kept in the order the
+# inline version used, because restore_dhcp_setting/dhcp_setting edit
+# /etc/config/dhcp and reload_dnsmasq is what makes those edits take effect.
+photondns_post_start() {
+	setcron
 
 	if [ "$redirect" -eq 1 ]; then
 		dhcp_setting
