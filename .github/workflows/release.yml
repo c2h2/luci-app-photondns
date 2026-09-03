@@ -73,8 +73,13 @@ jobs:
           # opkg); grab the Alpine static build, which ships `apk mkpkg`. An
           # Alpine v2 .apk is just a gzip tarball, so we can unpack the static
           # binary without needing apk itself.
-          url="https://dl-cdn.alpinelinux.org/alpine/edge/main/x86_64/apk-tools-static-3.0.6-r0.apk"
-          curl -fsSL "$url" -o /tmp/apk-static.apk
+          # Alpine edge keeps only the current build, so a pinned filename
+          # 404s as soon as it is bumped: resolve the newest one from the index.
+          base="https://dl-cdn.alpinelinux.org/alpine/edge/main/x86_64"
+          name=$(curl -fsSL "$base/" | grep -o 'apk-tools-static-[0-9][^"<]*\.apk' | sort -V | tail -1)
+          [ -n "$name" ] || { echo "could not find apk-tools-static in $base"; exit 1; }
+          echo "using $name"
+          curl -fsSL "$base/$name" -o /tmp/apk-static.apk
           tar xzf /tmp/apk-static.apk -C /tmp sbin/apk.static
           sudo install -m 0755 /tmp/sbin/apk.static /usr/local/bin/apk
           apk --version
