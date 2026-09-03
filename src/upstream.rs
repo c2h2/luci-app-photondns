@@ -8,12 +8,12 @@ use anyhow::{anyhow, bail, Context, Result};
 use parking_lot::{Mutex, RwLock};
 use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
-use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::{TcpStream, UdpSocket};
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot, watch};
 use tokio_rustls::rustls::pki_types::ServerName;
 use tokio_rustls::rustls::{ClientConfig, RootCertStore};
 use tokio_rustls::TlsConnector;
@@ -156,12 +156,17 @@ impl Upstream {
         addr: &str,
         insecure: bool,
         idle_timeout: u64,
+        query_timeout: Duration,
         bootstrap: SocketAddr,
     ) -> Result<Arc<Self>> {
         let (scheme, host, port, path) = parse_addr(addr)?;
         let ip: Option<IpAddr> = host.parse().ok();
         let sni = host.clone();
         let idle = Duration::from_secs(idle_timeout.max(5));
+        let tune = TcpTuning {
+            keepalive: idle,
+            user_timeout: query_timeout.max(Duration::from_secs(1)),
+        };
 
         let up = Arc::new(Upstream {
             addr_str: addr.to_string(),
@@ -176,10 +181,11 @@ impl Upstream {
                 PipePool::new(
                     matches!(scheme, Scheme::Tls).then(|| (tls_connector(insecure), sni.clone())),
                     idle,
+                    tune,
                 )
             }),
             doh: matches!(scheme, Scheme::Https)
-                .then(|| DohPool::new(tls_connector(insecure), sni, idle)),
+                .then(|| DohPool::new(tls_connector(insecure), sni, idle, tune)),
         });
 
         // hostname upstreams resolve via bootstrap, refreshed periodically
@@ -279,12 +285,52 @@ impl Upstream {
             }
             Err(e) => {
                 log::debug!("{}: query failed: {}", self.addr_str, e);
-                self.state
+                let went_down = self
+                    .state
                     .record_failure(fail_threshold, cooldown, &self.addr_str);
+                if went_down {
+                    // the breaker just opened: whatever connection we were
+                    // using is suspect, so make sure the half-open probes
+                    // after cooldown get a fresh socket instead of re-testing
+                    // a possibly dead one forever
+                    self.reset_conns();
+                }
             }
         }
         res
     }
+
+    /// Drop pooled stream connections so the next query reconnects.
+    pub fn reset_conns(&self) {
+        if let Some(p) = &self.pipe {
+            p.reset();
+        }
+        if let Some(d) = &self.doh {
+            d.reset();
+        }
+    }
+}
+
+/// Kernel-side backstops for stream upstreams. `keepalive` probes idle
+/// connections (also keeps NAT state alive); `user_timeout` (Linux only)
+/// aborts a connection whose sent data stays unacked that long, so a
+/// blackholed socket errors out in seconds instead of the ~15 min default
+/// retransmission cycle.
+#[derive(Clone, Copy)]
+struct TcpTuning {
+    keepalive: Duration,
+    user_timeout: Duration,
+}
+
+fn tune_tcp(tcp: &TcpStream, t: TcpTuning) {
+    tcp.set_nodelay(true).ok();
+    let sock = socket2::SockRef::from(tcp);
+    let ka = socket2::TcpKeepalive::new()
+        .with_time(t.keepalive)
+        .with_interval(t.user_timeout);
+    sock.set_tcp_keepalive(&ka).ok();
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    sock.set_tcp_user_timeout(Some(t.user_timeout)).ok();
 }
 
 /// Resolve a hostname via the bootstrap plain-DNS server (A, then AAAA).
@@ -423,34 +469,77 @@ type PipeReq = (Vec<u8>, oneshot::Sender<Vec<u8>>);
 
 struct PipeConn {
     tx: mpsc::UnboundedSender<PipeReq>,
-    alive: Arc<AtomicBool>,
+    shared: Arc<PipeShared>,
 }
+
+/// Hard cap on in-flight requests per connection; beyond this the ID
+/// search could otherwise spin forever on a full 16-bit space.
+const PIPE_MAX_PENDING: usize = 4096;
 
 struct PipeShared {
     pending: Mutex<HashMap<u16, oneshot::Sender<Vec<u8>>>>,
-    alive: Arc<AtomicBool>,
+    alive: AtomicBool,
     next_id: AtomicU16,
+    /// µs since `epoch` of the last frame read on this connection
+    last_rx_us: AtomicU64,
+    epoch: Instant,
+    /// flips to true on kill(); both I/O tasks select on it so a dead
+    /// connection's socket is actually closed instead of a reader task
+    /// sitting in read_exact() until the kernel gives up on it
+    close_tx: watch::Sender<bool>,
+}
+
+impl PipeShared {
+    fn now_us(&self) -> u64 {
+        self.epoch.elapsed().as_micros() as u64
+    }
+
+    /// Has any frame arrived at or after `since_us`?
+    fn received_since(&self, since_us: u64) -> bool {
+        self.last_rx_us.load(Ordering::Acquire) >= since_us
+    }
+
+    /// Tear the connection down: fail every waiter (they retry on a fresh
+    /// connection), and stop both I/O tasks. Idempotent.
+    fn kill(&self) {
+        self.alive.store(false, Ordering::Release);
+        self.pending.lock().clear();
+        self.close_tx.send_replace(true);
+    }
+
+    /// Drop waiters whose callers already gave up (timeouts, hedged losers).
+    fn reap(pending: &mut HashMap<u16, oneshot::Sender<Vec<u8>>>) {
+        pending.retain(|_, tx| !tx.is_closed());
+    }
 }
 
 impl PipeConn {
     fn spawn(stream: Box<dyn Io>, idle: Duration) -> PipeConn {
         let (tx, mut rx) = mpsc::unbounded_channel::<PipeReq>();
-        let alive = Arc::new(AtomicBool::new(true));
+        let (close_tx, _) = watch::channel(false);
         let shared = Arc::new(PipeShared {
             pending: Mutex::new(HashMap::new()),
-            alive: alive.clone(),
+            alive: AtomicBool::new(true),
             next_id: AtomicU16::new(fastrand::u16(..)),
+            last_rx_us: AtomicU64::new(0),
+            epoch: Instant::now(),
+            close_tx,
         });
         let (mut rd, mut wr) = tokio::io::split(stream);
 
         // writer + idle watchdog
         let ws = shared.clone();
+        let mut w_close = shared.close_tx.subscribe();
         tokio::spawn(async move {
             loop {
                 let msg = tokio::select! {
                     m = rx.recv() => m,
+                    _ = w_close.changed() => None,
                     _ = tokio::time::sleep(idle) => {
-                        if ws.pending.lock().is_empty() {
+                        let mut pending = ws.pending.lock();
+                        // stale waiters must not keep the connection open
+                        PipeShared::reap(&mut pending);
+                        if pending.is_empty() {
                             None // idle close
                         } else {
                             continue;
@@ -460,6 +549,13 @@ impl PipeConn {
                 let Some((mut buf, resp_tx)) = msg else { break };
                 let id = {
                     let mut pending = ws.pending.lock();
+                    if pending.len() > 32 {
+                        PipeShared::reap(&mut pending);
+                    }
+                    if pending.len() >= PIPE_MAX_PENDING {
+                        drop(resp_tx); // caller sees "connection closed" and retries
+                        continue;
+                    }
                     let mut id = ws.next_id.fetch_add(1, Ordering::Relaxed);
                     while pending.contains_key(&id) {
                         id = ws.next_id.fetch_add(1, Ordering::Relaxed);
@@ -475,55 +571,74 @@ impl PipeConn {
                     break;
                 }
             }
-            ws.alive.store(false, Ordering::Release);
-            ws.pending.lock().clear();
+            ws.kill();
             let _ = wr.shutdown().await;
         });
 
         // reader
         let rs = shared.clone();
+        let mut r_close = shared.close_tx.subscribe();
         tokio::spawn(async move {
             let mut lenbuf = [0u8; 2];
             loop {
-                if rd.read_exact(&mut lenbuf).await.is_err() {
-                    break;
-                }
-                let len = u16::from_be_bytes(lenbuf) as usize;
-                let mut buf = vec![0u8; len];
-                if rd.read_exact(&mut buf).await.is_err() {
-                    break;
-                }
-                if len >= dns::HEADER_LEN {
+                let read_frame = async {
+                    rd.read_exact(&mut lenbuf).await?;
+                    let len = u16::from_be_bytes(lenbuf) as usize;
+                    let mut buf = vec![0u8; len];
+                    rd.read_exact(&mut buf).await?;
+                    Ok::<_, std::io::Error>(buf)
+                };
+                let buf = tokio::select! {
+                    r = read_frame => match r {
+                        Ok(b) => b,
+                        Err(_) => break,
+                    },
+                    _ = r_close.changed() => break,
+                };
+                rs.last_rx_us.store(rs.now_us(), Ordering::Release);
+                if buf.len() >= dns::HEADER_LEN {
                     let id = dns::get_id(&buf);
                     if let Some(tx) = rs.pending.lock().remove(&id) {
                         let _ = tx.send(buf);
                     }
                 }
             }
-            rs.alive.store(false, Ordering::Release);
-            rs.pending.lock().clear();
+            rs.kill();
         });
 
-        PipeConn { tx, alive }
+        PipeConn { tx, shared }
     }
 
     fn is_alive(&self) -> bool {
-        self.alive.load(Ordering::Acquire) && !self.tx.is_closed()
+        self.shared.alive.load(Ordering::Acquire) && !self.tx.is_closed()
     }
 }
 
 struct PipePool {
     tls: Option<(TlsConnector, String)>,
     idle: Duration,
+    tune: TcpTuning,
     conn: tokio::sync::Mutex<Option<Arc<PipeConn>>>,
 }
 
 impl PipePool {
-    fn new(tls: Option<(TlsConnector, String)>, idle: Duration) -> Self {
+    fn new(tls: Option<(TlsConnector, String)>, idle: Duration, tune: TcpTuning) -> Self {
         Self {
             tls,
             idle,
+            tune,
             conn: tokio::sync::Mutex::new(None),
+        }
+    }
+
+    /// Kill the pooled connection (if any); the next query reconnects.
+    fn reset(&self) {
+        // try_lock: never block a sync caller; if a connect is in progress
+        // the connection being built is brand new anyway
+        if let Ok(guard) = self.conn.try_lock() {
+            if let Some(c) = guard.as_ref() {
+                c.shared.kill();
+            }
         }
     }
 
@@ -536,7 +651,7 @@ impl PipePool {
         }
         let connect = async {
             let tcp = TcpStream::connect(target).await?;
-            tcp.set_nodelay(true).ok();
+            tune_tcp(&tcp, self.tune);
             let stream: Box<dyn Io> = match &self.tls {
                 None => Box::new(tcp),
                 Some((connector, sni)) => {
@@ -559,6 +674,7 @@ impl PipePool {
         for attempt in 0..2 {
             let conn = self.get_conn(target, deadline).await?;
             let (tx, rx) = oneshot::channel();
+            let sent_at = conn.shared.now_us();
             if conn.tx.send((query.to_vec(), tx)).is_err() {
                 continue; // conn died between get and send
             }
@@ -566,7 +682,20 @@ impl PipePool {
                 Ok(Ok(resp)) => return Ok(resp),
                 Ok(Err(_)) if attempt == 0 => continue, // conn broke mid-flight
                 Ok(Err(_)) => bail!("stream connection closed"),
-                Err(_) => bail!("stream query timeout"),
+                Err(_) => {
+                    // Dropping `rx` lets the writer reap our pending slot. If
+                    // the connection produced *nothing* for the whole wait it
+                    // is almost certainly blackholed (NAT/WAN flap, peer hung):
+                    // kill it so the next query - and the health prober -
+                    // reconnect instead of timing out on it until the kernel
+                    // notices. A connection still delivering other answers is
+                    // healthy and is left alone.
+                    if !conn.shared.received_since(sent_at) {
+                        log::debug!("stream connection silent through timeout, dropping it");
+                        conn.shared.kill();
+                    }
+                    bail!("stream query timeout")
+                }
             }
         }
         bail!("stream connection failed twice")
@@ -584,22 +713,29 @@ struct DohPool {
     connector: TlsConnector,
     sni: String,
     idle: Duration,
+    tune: TcpTuning,
     conns: Mutex<Vec<DohConn>>,
 }
 
 impl DohPool {
-    fn new(connector: TlsConnector, sni: String, idle: Duration) -> Self {
+    fn new(connector: TlsConnector, sni: String, idle: Duration, tune: TcpTuning) -> Self {
         Self {
             connector,
             sni,
             idle,
+            tune,
             conns: Mutex::new(Vec::new()),
         }
     }
 
+    /// Drop every idle keep-alive connection.
+    fn reset(&self) {
+        self.conns.lock().clear();
+    }
+
     async fn dial(&self, target: SocketAddr) -> Result<Box<dyn Io>> {
         let tcp = TcpStream::connect(target).await?;
-        tcp.set_nodelay(true).ok();
+        tune_tcp(&tcp, self.tune);
         let name = ServerName::try_from(self.sni.clone())
             .map_err(|_| anyhow!("bad SNI '{}'", self.sni))?;
         Ok(Box::new(self.connector.connect(name, tcp).await?))
@@ -783,5 +919,146 @@ mod tests {
         assert_eq!((h.as_str(), p), ("223.5.5.5", 5353));
 
         assert!(parse_addr("ftp://x").is_err());
+    }
+
+    /// Fake TCP DNS peer. `silent_conns` accepted connections read queries
+    /// but never answer (a blackholed socket); later connections echo each
+    /// query back with QR set, except names containing `hang` which are
+    /// swallowed. Returns (addr, accepted-connection counter).
+    async fn fake_peer(
+        silent_conns: usize,
+        hang: &'static str,
+    ) -> (SocketAddr, Arc<std::sync::atomic::AtomicUsize>) {
+        use tokio::net::TcpListener;
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let accepted = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let acc = accepted.clone();
+        tokio::spawn(async move {
+            loop {
+                let Ok((mut s, _)) = listener.accept().await else { break };
+                let n = acc.fetch_add(1, Ordering::SeqCst);
+                let silent = n < silent_conns;
+                tokio::spawn(async move {
+                    let mut lenbuf = [0u8; 2];
+                    loop {
+                        if s.read_exact(&mut lenbuf).await.is_err() {
+                            return;
+                        }
+                        let len = u16::from_be_bytes(lenbuf) as usize;
+                        let mut q = vec![0u8; len];
+                        if s.read_exact(&mut q).await.is_err() {
+                            return;
+                        }
+                        if silent {
+                            continue; // hold the connection open, never reply
+                        }
+                        let name = dns::parse_query(&q).map(|m| m.qname).unwrap_or_default();
+                        if !hang.is_empty() && name.contains(hang) {
+                            continue;
+                        }
+                        q[2] |= 0x80; // QR
+                        let mut frame = (len as u16).to_be_bytes().to_vec();
+                        frame.extend_from_slice(&q);
+                        if s.write_all(&frame).await.is_err() {
+                            return;
+                        }
+                    }
+                });
+            }
+        });
+        (addr, accepted)
+    }
+
+    fn tcp_upstream(addr: SocketAddr, timeout: Duration) -> Arc<Upstream> {
+        Upstream::new(
+            &format!("tcp://{}", addr),
+            false,
+            30,
+            timeout,
+            "127.0.0.1:53".parse().unwrap(),
+        )
+        .unwrap()
+    }
+
+    async fn pooled_conn_alive(up: &Upstream) -> Option<bool> {
+        let guard = up.pipe.as_ref().unwrap().conn.lock().await;
+        guard.as_ref().map(|c| c.is_alive())
+    }
+
+    #[tokio::test]
+    async fn silent_stream_conn_is_dropped_and_next_query_reconnects() {
+        let (addr, accepted) = fake_peer(1, "").await;
+        let timeout = Duration::from_millis(300);
+        let up = tcp_upstream(addr, timeout);
+        let q = dns::build_query("example.com", dns::TYPE_A, 1).unwrap();
+
+        // 1st connection is blackholed: the query must time out ...
+        let err = up
+            .query(&q, Instant::now() + timeout)
+            .await
+            .expect_err("silent peer must time out");
+        assert!(err.to_string().contains("timeout"), "{}", err);
+        // ... and the connection must be discarded, not kept "alive"
+        assert_eq!(pooled_conn_alive(&up).await, Some(false));
+        assert!(up.pipe.as_ref().unwrap().conn.lock().await.as_ref().unwrap()
+            .shared.pending.lock().is_empty());
+
+        // 2nd query gets a fresh connection to a peer that answers
+        let resp = up
+            .query(&q, Instant::now() + Duration::from_secs(2))
+            .await
+            .expect("reconnect must succeed");
+        assert!(dns::is_response(&resp));
+        assert_eq!(accepted.load(Ordering::SeqCst), 2, "must have reconnected");
+        assert_eq!(pooled_conn_alive(&up).await, Some(true));
+    }
+
+    #[tokio::test]
+    async fn healthy_conn_survives_one_hung_query() {
+        // peer answers everything except names containing "hang"
+        let (addr, accepted) = fake_peer(0, "hang").await;
+        let timeout = Duration::from_millis(400);
+        let up = tcp_upstream(addr, timeout);
+        let fast = dns::build_query("fast.example.com", dns::TYPE_A, 1).unwrap();
+        let hung = dns::build_query("hang.example.com", dns::TYPE_A, 1).unwrap();
+
+        up.query(&fast, Instant::now() + timeout).await.unwrap();
+        let up2 = up.clone();
+        let fast2 = fast.clone();
+        // while the hung query waits, other traffic keeps flowing
+        let side = tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(150)).await;
+            up2.query(&fast2, Instant::now() + Duration::from_secs(1))
+                .await
+                .unwrap();
+        });
+        let err = up.query(&hung, Instant::now() + timeout).await.unwrap_err();
+        assert!(err.to_string().contains("timeout"), "{}", err);
+        side.await.unwrap();
+        // the connection delivered an answer during the wait, so it stays
+        assert_eq!(pooled_conn_alive(&up).await, Some(true));
+        assert_eq!(accepted.load(Ordering::SeqCst), 1, "no reconnect expected");
+    }
+
+    #[tokio::test]
+    async fn breaker_opening_resets_pooled_conn() {
+        let (addr, accepted) = fake_peer(0, "").await;
+        let up = tcp_upstream(addr, Duration::from_secs(1));
+        let q = dns::build_query("example.com", dns::TYPE_A, 1).unwrap();
+        up.query(&q, Instant::now() + Duration::from_secs(1)).await.unwrap();
+        assert_eq!(pooled_conn_alive(&up).await, Some(true));
+
+        // simulate what query_measured does when the breaker trips
+        let cd = Duration::from_millis(50);
+        assert!(!up.state.record_failure(2, cd, "t"));
+        assert!(up.state.record_failure(2, cd, "t"));
+        up.reset_conns();
+        assert_eq!(pooled_conn_alive(&up).await, Some(false));
+
+        // half-open probe after cooldown uses a new socket
+        tokio::time::sleep(cd).await;
+        up.query(&q, Instant::now() + Duration::from_secs(1)).await.unwrap();
+        assert_eq!(accepted.load(Ordering::SeqCst), 2);
     }
 }

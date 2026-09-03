@@ -60,10 +60,13 @@ impl Group {
             format!("{}:53", g.bootstrap).parse()
         }
         .map_err(|_| anyhow!("group {}: bad bootstrap '{}'", g.name, g.bootstrap))?;
+        let timeout = Duration::from_millis(g.timeout_ms.max(100));
         let mk = |addrs: &[String]| -> Result<Vec<Arc<Upstream>>> {
             addrs
                 .iter()
-                .map(|a| Upstream::new(a, g.insecure_skip_verify, g.idle_timeout, bootstrap))
+                .map(|a| {
+                    Upstream::new(a, g.insecure_skip_verify, g.idle_timeout, timeout, bootstrap)
+                })
                 .collect()
         };
         Ok(Arc::new(Group {
@@ -72,7 +75,7 @@ impl Group {
             upstreams: mk(&g.upstreams)?,
             backups: mk(&g.backups)?,
             hedge_delay: Duration::from_millis(g.hedge_delay_ms.max(1)),
-            timeout: Duration::from_millis(g.timeout_ms.max(100)),
+            timeout,
             fail_threshold: fo.fail_threshold.max(1),
             recover_threshold: fo.recover_threshold.max(1),
             cooldown: Duration::from_secs(fo.cooldown.max(1)),

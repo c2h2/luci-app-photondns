@@ -58,7 +58,9 @@ impl UpstreamState {
         }
     }
 
-    pub fn record_failure(&self, fail_threshold: u32, cooldown: Duration, name: &str) {
+    /// Returns true when this failure is the one that opened the breaker
+    /// (healthy -> DOWN transition).
+    pub fn record_failure(&self, fail_threshold: u32, cooldown: Duration, name: &str) -> bool {
         self.fail.fetch_add(1, Ordering::Relaxed);
         self.consec_ok.store(0, Ordering::Relaxed);
         let fails = self.consec_fail.fetch_add(1, Ordering::Relaxed) + 1;
@@ -73,11 +75,13 @@ impl UpstreamState {
                 name,
                 fails
             );
+            return true;
         } else if !was_healthy {
             // failed during half-open trial: restart cooldown
             self.cooldown_until_ms
                 .store(unix_ms() + cooldown.as_millis() as u64, Ordering::Relaxed);
         }
+        false
     }
 
     /// Available = healthy, or down but past cooldown (half-open trial).
