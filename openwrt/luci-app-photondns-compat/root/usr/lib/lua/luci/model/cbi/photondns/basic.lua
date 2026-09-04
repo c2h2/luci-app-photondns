@@ -4,6 +4,18 @@ local m, s, o
 -- inline list status + download/update button; polls the controller's JSON
 -- endpoints (api/listupdate, api/liststatus) the same way the modern JS app
 -- polls rpcd
+-- calendar-day age of a timestamp: "today", "yesterday" or "N days ago"
+local function list_age(ts)
+	local function midnight(t)
+		local d = os.date("*t", t)
+		return os.time({ year = d.year, month = d.month, day = d.day, hour = 0 })
+	end
+	local days = math.floor((midnight(os.time()) - midnight(ts)) / 86400 + 0.5)
+	if days <= 0 then return translate("today") end
+	if days == 1 then return translate("yesterday") end
+	return translatef("%d days ago", days)
+end
+
 local function list_widget(which, file)
 	local fs = require "nixio.fs"
 	local disp = require "luci.dispatcher"
@@ -12,7 +24,8 @@ local function list_widget(which, file)
 	if st then
 		local n = tonumber((luci.sys.exec("wc -l < " .. file .. " 2>/dev/null") or ""):match("%d+")) or 0
 		status_html = string.format("<strong>%s</strong>",
-			translatef("%d domains, updated %s", n, os.date("%Y-%m-%d %H:%M:%S", st.mtime)))
+			translatef("%d domains, updated %s (%s)", n,
+				os.date("%Y-%m-%d %H:%M", st.mtime), list_age(st.mtime)))
 	else
 		status_html = string.format("<em style=\"color:#d43f3a\">%s</em>", translate("not downloaded yet"))
 	end
@@ -24,10 +37,27 @@ local function list_widget(which, file)
 if (!window.photondnsListUpdate) {
 	window.photondnsI18n = {
 		updating: ']==] .. translate("Updating...") .. [==[',
-		done: ']==] .. translate("%d domains, updated %s") .. [==[',
+		done: ']==] .. translate("%d domains, updated %s (%s)") .. [==[',
+		today: ']==] .. translate("today") .. [==[',
+		yesterday: ']==] .. translate("yesterday") .. [==[',
+		daysago: ']==] .. translate("%d days ago") .. [==[',
 		fail: ']==] .. translate("Download failed - check the log on the List Updates page.") .. [==[',
 		startfail: ']==] .. translate("Update failed to start: %s") .. [==[',
 		updatenow: ']==] .. translate("Update Now") .. [==['
+	};
+	window.photondnsListDate = function(ts) {
+		var d = new Date(ts * 1000);
+		function p(n) { return ('0' + n).slice(-2); }
+		return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) +
+			' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+	};
+	window.photondnsListAge = function(ts) {
+		var I = window.photondnsI18n;
+		function dayOf(d) { return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); }
+		var days = Math.round((dayOf(new Date()) - dayOf(new Date(ts * 1000))) / 86400000);
+		if (days <= 0) return I.today;
+		if (days === 1) return I.yesterday;
+		return I.daysago.replace('%d', days);
 	};
 	window.photondnsListUpdate = function(key, updUrl, stUrl) {
 		var I = window.photondnsI18n;
@@ -60,7 +90,8 @@ if (!window.photondnsListUpdate) {
 					if (st.exists) {
 						btn.value = I.updatenow;
 						span.innerHTML = '<strong>' + I.done.replace('%d', st.domains)
-							.replace('%s', new Date(st.mtime * 1000).toLocaleString()) + '</strong>';
+							.replace('%s', window.photondnsListDate(st.mtime))
+							.replace('%s', window.photondnsListAge(st.mtime)) + '</strong>';
 					} else {
 						span.innerHTML = '<em style="color:#d43f3a">' + I.fail + '</em>';
 					}

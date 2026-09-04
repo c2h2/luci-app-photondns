@@ -478,8 +478,17 @@ msgstr "更新启动失败：%s"
 msgid "China list status"
 msgstr "国内域名列表状态"
 
-msgid "%d domains, updated %s"
-msgstr "%d 个域名，更新于 %s"
+msgid "%d domains, updated %s (%s)"
+msgstr "%d 个域名，更新于 %s（%s）"
+
+msgid "today"
+msgstr "今天"
+
+msgid "yesterday"
+msgstr "昨天"
+
+msgid "%d days ago"
+msgstr "%d 天前"
 
 msgid "Query Log"
 msgstr "查询日志"
@@ -751,9 +760,6 @@ msgstr "开启"
 
 msgid "Update failed to start:"
 msgstr "更新启动失败："
-
-msgid "domains, updated"
-msgstr "个域名，更新于"
 
 msgid "photondns started."
 msgstr "photondns 已启动。"

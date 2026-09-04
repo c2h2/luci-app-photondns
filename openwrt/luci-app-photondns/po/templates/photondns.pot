@@ -475,7 +475,16 @@ msgstr ""
 msgid "China list status"
 msgstr ""
 
-msgid "%d domains, updated %s"
+msgid "%d domains, updated %s (%s)"
+msgstr ""
+
+msgid "today"
+msgstr ""
+
+msgid "yesterday"
+msgstr ""
+
+msgid "%d days ago"
 msgstr ""
 
 msgid "Query Log"
@@ -747,9 +756,6 @@ msgid "Turn On"
 msgstr ""
 
 msgid "Update failed to start:"
-msgstr ""
-
-msgid "domains, updated"
 msgstr ""
 
 msgid "photondns started."

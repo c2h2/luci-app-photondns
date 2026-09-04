@@ -25,12 +25,28 @@
 		return String(s == null ? '' : s)
 			.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 	}
+	// List timestamps: fixed YYYY-MM-DD HH:MM plus a calendar-day age hint.
+	function fmtListDate(ts) {
+		var d = new Date(ts * 1000);
+		function p(n) { return ('0' + n).slice(-2); }
+		return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) +
+			' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+	}
+	function fmtListAge(ts) {
+		function dayOf(d) { return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); }
+		var days = Math.round((dayOf(new Date()) - dayOf(new Date(ts * 1000))) / 86400000);
+		if (days <= 0) return '<%:today%>';
+		if (days === 1) return '<%:yesterday%>';
+		return '<%:%d days ago%>'.replace('%d', days);
+	}
 	function statusHtml(st) {
 		if (st && st.updating)
 			return '<em style="color:#c7a500"><%:Updating...%></em>';
 		if (st && st.exists)
-			return '<strong>' + st.domains + ' <%:domains, updated%> ' +
-				esc(new Date(st.mtime * 1000).toLocaleString()) + '</strong>';
+			return '<strong>' + esc('<%:%d domains, updated %s (%s)%>'
+				.replace('%d', st.domains)
+				.replace('%s', fmtListDate(st.mtime))
+				.replace('%s', fmtListAge(st.mtime))) + '</strong>';
 		return '<em style="color:#d43f3a"><%:not downloaded yet%></em>';
 	}
 

@@ -23,12 +23,26 @@ const LISTS = [
 	}
 ];
 
+// List timestamps: fixed YYYY-MM-DD HH:MM plus a calendar-day age hint.
+function fmtListDate(ts) {
+	const d = new Date(ts * 1000), p = n => ('0' + n).slice(-2);
+	return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) +
+		' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+function fmtListAge(ts) {
+	const dayOf = d => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+	const days = Math.round((dayOf(new Date()) - dayOf(new Date(ts * 1000))) / 86400000);
+	if (days <= 0) return _('today');
+	if (days === 1) return _('yesterday');
+	return _('%d days ago').format(days);
+}
+
 function statusText(st) {
 	if (st && st.updating)
 		return E('em', { style: 'color:#c7a500' }, _('Updating...'));
 	if (st && st.exists)
-		return E('strong', {}, _('%d domains, updated %s').format(st.domains,
-			new Date(st.mtime * 1000).toLocaleString()));
+		return E('strong', {}, _('%d domains, updated %s (%s)').format(st.domains,
+			fmtListDate(st.mtime), fmtListAge(st.mtime)));
 	return E('em', { style: 'color:#d43f3a' }, _('not downloaded yet'));
 }
 
