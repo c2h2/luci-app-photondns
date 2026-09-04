@@ -56,3 +56,7 @@ lto = "thin"
 codegen-units = 1
 strip = true
 panic = "abort"
+
+[[bin]]
+name = "cachebench"
+path = "src/bin/cachebench.rs"

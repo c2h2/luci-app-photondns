@@ -64,7 +64,13 @@ jobs:
 
       - name: Cross-compile daemon
         run: |
-          cargo zigbuild --release --bin photondns --target ${{ matrix.triple }}
+          # fastalloc = mimalloc as the global allocator. Measured on the musl
+          # targets it cuts the cache hot path from ~150-190ns/hit to a flat
+          # ~118ns/hit under thread oversubscription (35-40% faster, and far
+          # steadier) because the stock musl malloc serializes badly under the
+          # many-small-allocs-per-query load. Big free win on the exact CPUs
+          # users run; see bench/mimalloc.md.
+          cargo zigbuild --release --features fastalloc --bin photondns --target ${{ matrix.triple }}
           file target/${{ matrix.triple }}/release/photondns
 
       - name: Install apk-tools 3.x (for .apk output)
