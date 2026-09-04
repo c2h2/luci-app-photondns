@@ -33,10 +33,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { arch: aarch64,  triple: aarch64-unknown-linux-musl,      owrt: aarch64_generic,           tier: 2 }
-          - { arch: x86_64,   triple: x86_64-unknown-linux-musl,       owrt: x86_64,                    tier: 2 }
-          - { arch: armv7,    triple: armv7-unknown-linux-musleabihf,  owrt: arm_cortex-a7_neon-vfpv4,  tier: 2 }
-          - { arch: riscv64,  triple: riscv64gc-unknown-linux-musl,    owrt: riscv64_riscv64,           tier: 2 }
+          # `alloc` = cargo feature flags for the allocator. mimalloc (fastalloc)
+          # links cleanly on 64-bit musl but its C code needs libatomic on armv7,
+          # which the static musl link cannot resolve, so armv7 keeps the
+          # pure-Rust allocator (no fastalloc). See bench/mimalloc.md.
+          - { arch: aarch64,  triple: aarch64-unknown-linux-musl,      owrt: aarch64_generic,           tier: 2, alloc: "--features fastalloc" }
+          - { arch: x86_64,   triple: x86_64-unknown-linux-musl,       owrt: x86_64,                    tier: 2, alloc: "--features fastalloc" }
+          - { arch: armv7,    triple: armv7-unknown-linux-musleabihf,  owrt: arm_cortex-a7_neon-vfpv4,  tier: 2, alloc: "" }
+          - { arch: riscv64,  triple: riscv64gc-unknown-linux-musl,    owrt: riscv64_riscv64,           tier: 2, alloc: "--features fastalloc" }
     # NB: 32-bit mips/mipsel are intentionally excluded — the daemon uses
     # AtomicU64, which those targets lack (no native 64-bit atomics), so they
     # cannot build without code changes. Add them back only after the atomics
@@ -64,13 +68,13 @@ jobs:
 
       - name: Cross-compile daemon
         run: |
-          # fastalloc = mimalloc as the global allocator. Measured on the musl
-          # targets it cuts the cache hot path from ~150-190ns/hit to a flat
-          # ~118ns/hit under thread oversubscription (35-40% faster, and far
-          # steadier) because the stock musl malloc serializes badly under the
-          # many-small-allocs-per-query load. Big free win on the exact CPUs
-          # users run; see bench/mimalloc.md.
-          cargo zigbuild --release --features fastalloc --bin photondns --target ${{ matrix.triple }}
+          # fastalloc = mimalloc as the global allocator (matrix.alloc; empty on
+          # armv7 — see the matrix note). Measured on the 64-bit musl targets it
+          # cuts the cache hot path from ~150-190ns/hit to a flat ~118ns/hit
+          # under thread oversubscription (35-40% faster, and far steadier)
+          # because the stock musl malloc serializes badly under the
+          # many-small-allocs-per-query load. See bench/mimalloc.md.
+          cargo zigbuild --release ${{ matrix.alloc }} --bin photondns --target ${{ matrix.triple }}
           file target/${{ matrix.triple }}/release/photondns
 
       - name: Install apk-tools 3.x (for .apk output)
