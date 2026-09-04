@@ -317,11 +317,12 @@ return view.extend({
 		o = s.taboption('upstream', form.DynamicList, 'local_upstream', _('China DNS servers'),
 			_('Used for mainland-China domains and the Local Domains rule file'));
 		o.value('udp://223.5.5.5', _('AliDNS (UDP 223.5.5.5)'));
+		o.value('udp://223.6.6.6', _('AliDNS (UDP 223.6.6.6)'));
 		o.value('udp://119.29.29.29', _('Tencent DNSPod (UDP 119.29.29.29)'));
 		o.value('udp://114.114.114.114', _('114DNS (UDP)'));
 		o.value('tls://223.5.5.5', _('AliDNS (DoT)'));
 		o.value('tls://1.12.12.12', _('DNSPod (DoT)'));
-		o.default = 'udp://223.5.5.5';
+		o.default = ['udp://223.5.5.5', 'udp://223.6.6.6'];
 		o.depends('china_list', '1');
 
 		o = s.taboption('upstream', form.DummyValue, '_chinalist_status', _('China list status'));

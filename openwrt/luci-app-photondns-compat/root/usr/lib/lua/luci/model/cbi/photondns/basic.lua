@@ -265,6 +265,7 @@ o.rmempty = false
 o = s:taboption("upstream", DynamicList, "local_upstream", translate("China DNS servers"),
 	translate("Used for mainland-China domains and the Local Domains rule file"))
 o:value("udp://223.5.5.5", translate("AliDNS (UDP 223.5.5.5)"))
+o:value("udp://223.6.6.6", translate("AliDNS (UDP 223.6.6.6)"))
 o:value("udp://119.29.29.29", translate("Tencent DNSPod (UDP 119.29.29.29)"))
 o:value("udp://114.114.114.114", translate("114DNS (UDP)"))
 o:value("tls://223.5.5.5", translate("AliDNS (DoT)"))

@@ -18,12 +18,12 @@
 			"path": "photondns/status"
 		}
 	},
-	"admin/services/photondns/checker": {
-		"title": "Cache Lookup",
+	"admin/services/photondns/basic": {
+		"title": "Basic Settings",
 		"order": 6,
 		"action": {
 			"type": "view",
-			"path": "photondns/checker"
+			"path": "photondns/basic"
 		}
 	},
 	"admin/services/photondns/querylog": {
@@ -34,17 +34,9 @@
 			"path": "photondns/querylog"
 		}
 	},
-	"admin/services/photondns/basic": {
-		"title": "Basic Settings",
-		"order": 10,
-		"action": {
-			"type": "view",
-			"path": "photondns/basic"
-		}
-	},
 	"admin/services/photondns/rules": {
 		"title": "Rules",
-		"order": 15,
+		"order": 10,
 		"action": {
 			"type": "view",
 			"path": "photondns/rules"
@@ -52,10 +44,18 @@
 	},
 	"admin/services/photondns/chinalist": {
 		"title": "List Updates",
-		"order": 17,
+		"order": 15,
 		"action": {
 			"type": "view",
 			"path": "photondns/chinalist"
+		}
+	},
+	"admin/services/photondns/checker": {
+		"title": "Cache Lookup",
+		"order": 17,
+		"action": {
+			"type": "view",
+			"path": "photondns/checker"
 		}
 	},
 	"admin/services/photondns/logs": {

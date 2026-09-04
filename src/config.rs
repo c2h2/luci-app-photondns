@@ -389,7 +389,11 @@ impl Config {
             cfg.groups.push(GroupCfg {
                 name: "main".into(),
                 strategy: default_strategy(),
-                upstreams: vec!["udp://223.5.5.5".into(), "udp://119.29.29.29".into()],
+                upstreams: vec![
+                    "udp://223.5.5.5".into(),
+                    "udp://223.6.6.6".into(),
+                    "udp://119.29.29.29".into(),
+                ],
                 backups: vec![],
                 hedge_delay_ms: default_hedge_delay(),
                 timeout_ms: default_timeout(),

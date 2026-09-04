@@ -176,7 +176,7 @@ const methods = {
 	query_log: {
 		call: function() {
 			try {
-				let res = api_get('/log?n=500');
+				let res = api_get('/log?n=1000');
 				if (res.code === 0 && length(res.stdout) > 0) {
 					return { running: true, raw: res.stdout };
 				}

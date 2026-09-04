@@ -511,6 +511,52 @@ msgstr ""
 msgid "photondns is not running (or the query log is disabled)."
 msgstr ""
 
+# Query Log statistics panel (querylog.js)
+msgid "The statistics cover the queries currently shown (the filter applies to them too). Click a client, domain or route to filter by it."
+msgstr ""
+
+msgid "(no data)"
+msgstr ""
+
+msgid "Summary"
+msgstr ""
+
+msgid "Time span"
+msgstr ""
+
+msgid "Queries / min"
+msgstr ""
+
+msgid "Unique clients"
+msgstr ""
+
+msgid "Unique domains"
+msgstr ""
+
+msgid "Cache hit rate"
+msgstr ""
+
+msgid "Forwarded"
+msgstr ""
+
+msgid "Avg upstream RTT"
+msgstr ""
+
+msgid "Top clients"
+msgstr ""
+
+msgid "Top domains"
+msgstr ""
+
+msgid "Routes"
+msgstr ""
+
+msgid "Query types"
+msgstr ""
+
+msgid "Top upstreams"
+msgstr ""
+
 msgid "Query log size"
 msgstr ""
 
@@ -593,6 +639,9 @@ msgid "Update hour (0-23)"
 msgstr ""
 
 msgid "AliDNS (UDP 223.5.5.5)"
+msgstr ""
+
+msgid "AliDNS (UDP 223.6.6.6)"
 msgstr ""
 
 msgid "Tencent DNSPod (UDP 119.29.29.29)"

@@ -154,7 +154,7 @@ serve_stale = true
 [[group]]
 name = "main"
 strategy = "race"
-upstreams = ["udp://223.5.5.5", "udp://119.29.29.29"]
+upstreams = ["udp://223.5.5.5", "udp://223.6.6.6", "udp://119.29.29.29"]
 backups = ["tls://8.8.8.8"]
 ```
 

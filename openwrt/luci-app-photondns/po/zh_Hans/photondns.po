@@ -514,6 +514,52 @@ msgstr "按域名 / 客户端 / 路由过滤..."
 msgid "photondns is not running (or the query log is disabled)."
 msgstr "photondns 未运行（或查询日志已禁用）。"
 
+# Query Log statistics panel (querylog.js)
+msgid "The statistics cover the queries currently shown (the filter applies to them too). Click a client, domain or route to filter by it."
+msgstr "统计基于当前显示的查询（过滤器同样作用于统计）。点击客户端、域名或路由可按其过滤。"
+
+msgid "(no data)"
+msgstr "（无数据）"
+
+msgid "Summary"
+msgstr "概览"
+
+msgid "Time span"
+msgstr "时间跨度"
+
+msgid "Queries / min"
+msgstr "每分钟查询数"
+
+msgid "Unique clients"
+msgstr "客户端数"
+
+msgid "Unique domains"
+msgstr "域名数"
+
+msgid "Cache hit rate"
+msgstr "缓存命中率"
+
+msgid "Forwarded"
+msgstr "转发上游"
+
+msgid "Avg upstream RTT"
+msgstr "上游平均耗时"
+
+msgid "Top clients"
+msgstr "访问最多的客户端"
+
+msgid "Top domains"
+msgstr "查询最多的域名"
+
+msgid "Routes"
+msgstr "路由分布"
+
+msgid "Query types"
+msgstr "查询类型"
+
+msgid "Top upstreams"
+msgstr "上游服务器"
+
 msgid "Query log size"
 msgstr "查询日志条数"
 
@@ -597,6 +643,9 @@ msgstr "更新时间（0-23 点）"
 
 msgid "AliDNS (UDP 223.5.5.5)"
 msgstr "阿里 DNS（UDP 223.5.5.5）"
+
+msgid "AliDNS (UDP 223.6.6.6)"
+msgstr "阿里 DNS（UDP 223.6.6.6）"
 
 msgid "Tencent DNSPod (UDP 119.29.29.29)"
 msgstr "腾讯 DNSPod（UDP 119.29.29.29）"

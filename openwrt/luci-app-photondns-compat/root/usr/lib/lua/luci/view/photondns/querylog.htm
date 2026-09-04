@@ -3,6 +3,7 @@
 <h2><%:Query Log%></h2>
 <div class="cbi-map-descr">
 	<%:Live view of recent DNS queries: which client asked, how each query was answered (cache, hosts, blocked, or the upstream group and server that won the race) and how long it took. Kept in memory only.%>
+	<%:The statistics cover the queries currently shown (the filter applies to them too). Click a client, domain or route to filter by it.%>
 </div>
 
 <style type="text/css">
@@ -12,6 +13,20 @@
 #photondns_qlog .table-titles .th{font-size:11px;text-transform:uppercase;letter-spacing:.03em;opacity:.7}
 #photondns_qlog .tr:nth-child(2n) .td{background:rgba(127,127,127,.07)}
 #photondns_qlog .qcount{font-weight:600;color:#d43f3a;margin-left:3px}
+#photondns_qstats{display:flex;flex-wrap:wrap;margin:0 -4px 6px}
+#photondns_qstats .qs-card{flex:1;min-width:220px;margin:4px;padding:8px 12px;border:1px solid rgba(128,128,128,.35);border-radius:8px}
+#photondns_qstats h4{margin:0 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:.03em;opacity:.7}
+#photondns_qstats table{width:100%;border-collapse:collapse;margin:0}
+#photondns_qstats td{padding:1px 0;font-size:12px;line-height:1.45;border:0;vertical-align:middle}
+#photondns_qstats td.qs-k{opacity:.8}
+#photondns_qstats td.qs-v{text-align:right;font-weight:600;white-space:nowrap;padding-left:8px}
+#photondns_qstats td.qs-name{max-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
+#photondns_qstats td.qs-name:hover{text-decoration:underline}
+#photondns_qstats td.qs-bar{width:56px;padding:0 6px}
+#photondns_qstats td.qs-bar div{height:7px;border-radius:4px;background:#0d6efd;opacity:.55}
+#photondns_qstats .qs-badges span{display:inline-block;margin:0 6px 4px 0}
+#photondns_qstats .qs-badges b{margin-left:3px}
+#photondns_qstats .qs-empty{opacity:.6;font-size:12px}
 </style>
 
 <div style="margin:8px 0">
@@ -19,12 +34,14 @@
 		placeholder="<%:Filter by domain / client / route...%>" />
 </div>
 
+<div id="photondns_qstats"></div>
 <div id="photondns_qlog"><%:Collecting data...%></div>
 
 <script type="text/javascript">//<![CDATA[
 (function() {
 	var url = '<%=luci.dispatcher.build_url("admin/services/photondns/api/querylog")%>';
 	var lastEntries = null;
+	var TOP_N = 8;
 
 	var QTYPES = {
 		1: 'A', 2: 'NS', 5: 'CNAME', 6: 'SOA', 12: 'PTR', 15: 'MX', 16: 'TXT',
@@ -32,14 +49,16 @@
 		64: 'SVCB', 65: 'HTTPS', 255: 'ANY', 257: 'CAA'
 	};
 	var ROUTE_COLORS = {
-		cache: '#2ca02c', stale: '#17a2b8', hosts: '#7952b3', blocked: '#d43f3a',
-		redirect: '#6c757d', servfail: '#8b0000', local: '#e67e22', main: '#0d6efd'
+		cache: '#2ca02c', stale: '#17a2b8', hosts: '#7952b3', lan: '#7952b3',
+		blocked: '#d43f3a', 'aaaa-blocked': '#d43f3a', redirect: '#6c757d',
+		servfail: '#8b0000', local: '#e67e22', main: '#0d6efd'
 	};
 	var PROTO_COLORS = { udp: '#607d8b', tcp: '#00838f', doh: '#5e35b1' };
 
 	function esc(s) {
 		return String(s == null ? '' : s)
-			.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+			.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+			.replace(/"/g, '&quot;');
 	}
 	function routeBadge(route) {
 		var color = ROUTE_COLORS[route] || '#0d6efd';
@@ -56,6 +75,24 @@
 		var d = new Date(ts * 1000);
 		function p(n) { return ('0' + n).slice(-2); }
 		return p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+	}
+	function fmtSpan(sec) {
+		if (sec < 60) return sec + 's';
+		if (sec < 3600) return Math.floor(sec / 60) + 'm ' + (sec % 60) + 's';
+		return Math.floor(sec / 3600) + 'h ' + Math.floor((sec % 3600) / 60) + 'm';
+	}
+	function matches(e, f) {
+		return !f || (e.qname || '').toLowerCase().indexOf(f) >= 0 ||
+			(e.client || '').toLowerCase().indexOf(f) >= 0 ||
+			(e.route || '').toLowerCase().indexOf(f) >= 0 ||
+			(e.proto || '').toLowerCase().indexOf(f) >= 0 ||
+			(e.upstream || '').toLowerCase().indexOf(f) >= 0;
+	}
+	function topN(counts, n) {
+		var out = [];
+		for (var k in counts) if (counts.hasOwnProperty(k)) out.push([k, counts[k]]);
+		out.sort(function(a, b) { return b[1] - a[1]; });
+		return out.slice(0, n);
 	}
 
 	// Collapse identical consecutive queries into one row + count, as long as
@@ -79,8 +116,101 @@
 		return out;
 	}
 
+	// Aggregate the (filtered) window into simple counters for the stats panel.
+	function computeStats(entries) {
+		var st = { total: entries.length, clients: {}, domains: {}, routes: {}, qtypes: {},
+			upstreams: {}, newest: 0, oldest: Infinity, forwarded: 0, fwdRtt: 0,
+			cached: 0, blocked: 0 };
+		for (var i = 0; i < entries.length; i++) {
+			var e = entries[i];
+			st.clients[e.client] = (st.clients[e.client] || 0) + 1;
+			st.domains[e.qname] = (st.domains[e.qname] || 0) + 1;
+			st.routes[e.route] = (st.routes[e.route] || 0) + 1;
+			var t = QTYPES[e.qtype] || String(e.qtype);
+			st.qtypes[t] = (st.qtypes[t] || 0) + 1;
+			if (e.route === 'cache' || e.route === 'stale') st.cached++;
+			else if (e.route === 'blocked' || e.route === 'aaaa-blocked') st.blocked++;
+			// "redirect" reuses the upstream field for the target name, not a server
+			if (e.upstream && e.route !== 'redirect') {
+				st.forwarded++;
+				st.fwdRtt += e.rtt_ms;
+				var u = st.upstreams[e.upstream] || (st.upstreams[e.upstream] = { n: 0, rtt: 0 });
+				u.n++;
+				u.rtt += e.rtt_ms;
+			}
+			if (e.ts > st.newest) st.newest = e.ts;
+			if (e.ts < st.oldest) st.oldest = e.ts;
+		}
+		return st;
+	}
+
+	function card(title, body) {
+		return '<div class="qs-card"><h4>' + title + '</h4>' + body + '</div>';
+	}
+	// name / bar / count rows; data-f carries the click-to-filter value
+	function topTable(pairs, fmtCount) {
+		if (!pairs.length) return '<div class="qs-empty"><%:(no data)%></div>';
+		var max = pairs[0][1] || 1, html = '<table>';
+		for (var i = 0; i < pairs.length; i++) {
+			var p = pairs[i];
+			html += '<tr><td class="qs-name" title="' + esc(p[0]) + '" data-f="' + esc(p[0]) + '">' + esc(p[0]) + '</td>' +
+				'<td class="qs-bar"><div style="width:' + Math.round(p[1] * 100 / max) + '%"></div></td>' +
+				'<td class="qs-v">' + (fmtCount ? fmtCount(p) : esc(p[1])) + '</td></tr>';
+		}
+		return html + '</table>';
+	}
+	function kv(rows) {
+		var html = '<table>';
+		for (var i = 0; i < rows.length; i++)
+			html += '<tr><td class="qs-k">' + rows[i][0] + '</td><td class="qs-v">' + esc(rows[i][1]) + '</td></tr>';
+		return html + '</table>';
+	}
+
+	function renderStats(entries) {
+		var st = computeStats(entries);
+		if (!st.total) return '';
+		function pct(n) { return Math.round(n * 100 / st.total) + '%'; }
+		var span = st.newest - st.oldest;
+		var rate = span > 0 ? (st.total * 60 / span).toFixed(1) : '-';
+		var nkeys = function(o) { var n = 0; for (var k in o) if (o.hasOwnProperty(k)) n++; return n; };
+
+		var html = card('<%:Summary%>', kv([
+			['<%:Queries%>', st.total],
+			['<%:Time span%>', fmtSpan(span)],
+			['<%:Queries / min%>', rate],
+			['<%:Unique clients%>', nkeys(st.clients)],
+			['<%:Unique domains%>', nkeys(st.domains)],
+			['<%:Cache hit rate%>', pct(st.cached)],
+			['<%:Blocked%>', st.blocked + ' (' + pct(st.blocked) + ')'],
+			['<%:Forwarded%>', st.forwarded + ' (' + pct(st.forwarded) + ')'],
+			['<%:Avg upstream RTT%>', st.forwarded ? (st.fwdRtt / st.forwarded).toFixed(1) + ' ms' : '-']
+		]));
+
+		html += card('<%:Top clients%>', topTable(topN(st.clients, TOP_N),
+			function(p) { return p[1] + ' (' + pct(p[1]) + ')'; }));
+		html += card('<%:Top domains%>', topTable(topN(st.domains, TOP_N)));
+
+		var routes = topN(st.routes, 99), rhtml = '<div class="qs-badges">';
+		for (var i = 0; i < routes.length; i++)
+			rhtml += '<span style="cursor:pointer" data-f="' + esc(routes[i][0]) + '">' +
+				routeBadge(routes[i][0]) + '<b>' + routes[i][1] + ' (' + pct(routes[i][1]) + ')</b></span>';
+		rhtml += '</div><h4 style="margin-top:6px"><%:Query types%></h4><div class="qs-badges">';
+		var types = topN(st.qtypes, 99);
+		for (var j = 0; j < types.length; j++)
+			rhtml += '<span><span style="opacity:.8">' + esc(types[j][0]) + '</span><b>' + types[j][1] + '</b></span>';
+		rhtml += '</div>';
+		html += card('<%:Routes%>', rhtml);
+
+		var ups = [];
+		for (var k in st.upstreams) if (st.upstreams.hasOwnProperty(k))
+			ups.push([k, st.upstreams[k].n, st.upstreams[k].rtt / st.upstreams[k].n]);
+		ups.sort(function(a, b) { return b[1] - a[1]; });
+		html += card('<%:Top upstreams%>', topTable(ups.slice(0, TOP_N),
+			function(p) { return p[1] + ' &middot; ' + p[2].toFixed(1) + ' ms'; }));
+		return html;
+	}
+
 	function renderTable(entries) {
-		var f = (document.getElementById('photondns_qfilter').value || '').trim().toLowerCase();
 		var html = '<table class="table cbi-section-table"><tr class="tr table-titles">' +
 			'<th class="th" style="width:64px"><%:Time%></th>' +
 			'<th class="th" style="width:110px"><%:Client%></th>' +
@@ -90,18 +220,7 @@
 			'<th class="th" style="width:74px"><%:Route%></th>' +
 			'<th class="th"><%:Upstream%></th>' +
 			'<th class="th" style="width:66px; text-align:right"><%:ms%></th></tr>';
-		var filtered = [];
-		for (var i = 0; i < entries.length; i++) {
-			var e = entries[i];
-			if (f && !((e.qname || '').toLowerCase().indexOf(f) >= 0 ||
-				(e.client || '').toLowerCase().indexOf(f) >= 0 ||
-				(e.route || '').toLowerCase().indexOf(f) >= 0 ||
-				(e.proto || '').toLowerCase().indexOf(f) >= 0 ||
-				(e.upstream || '').toLowerCase().indexOf(f) >= 0))
-				continue;
-			filtered.push(e);
-		}
-		var groups = groupEntries(filtered);
+		var groups = groupEntries(entries);
 		var shown = 0;
 		for (var g = 0; g < groups.length; g++) {
 			if (++shown > 500) break;
@@ -129,6 +248,19 @@
 		try { return JSON.parse(res.raw).entries || []; } catch (e) { return null; }
 	}
 
+	// Re-render stats + table from the last fetched entries (filter applied).
+	function redraw() {
+		var stats = document.getElementById('photondns_qstats');
+		var el = document.getElementById('photondns_qlog');
+		if (!el || !stats || lastEntries === null) return;
+		var f = (document.getElementById('photondns_qfilter').value || '').trim().toLowerCase();
+		var filtered = [];
+		for (var i = 0; i < lastEntries.length; i++)
+			if (matches(lastEntries[i], f)) filtered.push(lastEntries[i]);
+		stats.innerHTML = renderStats(filtered);
+		el.innerHTML = renderTable(filtered);
+	}
+
 	function render(res) {
 		var el = document.getElementById('photondns_qlog');
 		if (!el) return;
@@ -138,14 +270,18 @@
 			return;
 		}
 		if (entries !== null) lastEntries = entries;
-		el.innerHTML = renderTable(lastEntries || []);
+		redraw();
 	}
 
-	document.getElementById('photondns_qfilter').onkeyup = function() {
-		if (lastEntries !== null) {
-			var el = document.getElementById('photondns_qlog');
-			if (el) el.innerHTML = renderTable(lastEntries);
-		}
+	document.getElementById('photondns_qfilter').onkeyup = redraw;
+
+	// click a client / domain / route in the stats panel to filter by it
+	document.getElementById('photondns_qstats').onclick = function(ev) {
+		var t = ev.target;
+		while (t && t !== this && !(t.getAttribute && t.getAttribute('data-f'))) t = t.parentNode;
+		if (!t || t === this) return;
+		document.getElementById('photondns_qfilter').value = t.getAttribute('data-f');
+		redraw();
 	};
 
 	XHR.poll(3, url, null, function(x, d) { render(d); });

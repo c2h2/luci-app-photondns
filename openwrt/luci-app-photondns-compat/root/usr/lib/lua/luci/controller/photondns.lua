@@ -22,16 +22,16 @@ function index()
 
 	entry({"admin", "services", "photondns", "status"},
 		template("photondns/status"), _("Status"), 5)
-	entry({"admin", "services", "photondns", "checker"},
-		template("photondns/checker"), _("Cache Lookup"), 6)
+	entry({"admin", "services", "photondns", "basic"},
+		cbi("photondns/basic"), _("Basic Settings"), 6)
 	entry({"admin", "services", "photondns", "querylog"},
 		template("photondns/querylog"), _("Query Log"), 7)
-	entry({"admin", "services", "photondns", "basic"},
-		cbi("photondns/basic"), _("Basic Settings"), 10)
 	entry({"admin", "services", "photondns", "rules"},
-		cbi("photondns/rules"), _("Rules"), 15)
+		cbi("photondns/rules"), _("Rules"), 10)
 	entry({"admin", "services", "photondns", "chinalist"},
-		template("photondns/chinalist"), _("List Updates"), 17)
+		template("photondns/chinalist"), _("List Updates"), 15)
+	entry({"admin", "services", "photondns", "checker"},
+		template("photondns/checker"), _("Cache Lookup"), 17)
 	entry({"admin", "services", "photondns", "logs"},
 		template("photondns/logs"), _("Logs"), 20)
 	entry({"admin", "services", "photondns", "help"},
@@ -108,7 +108,7 @@ function action_running()
 end
 
 function action_querylog()
-	local raw = api_get("/log?n=500")
+	local raw = api_get("/log?n=1000")
 	if raw then
 		write_json({ running = true, raw = raw })
 	else
