@@ -212,6 +212,65 @@ dig @192.168.1.1 -p 15533 example.com
 Then open LuCI → Services → photondns. Enable *DNS Forward* to make it the
 system resolver (dnsmasq settings are backed up and restored).
 
+## Install on a Photonicat 2
+
+The Ariaboard **photonicat2** is an OpenWrt-based router with a quad-core
+Cortex-A55 (RK3568), i.e. **aarch64** → package arch `aarch64_generic`. It is
+the device the ~90,000 qps on-device number above was measured on.
+
+SSH in (use your box's LAN address; the stock one if you never changed it) and
+check which package manager the firmware has — that decides `.ipk` vs `.apk`:
+
+```sh
+ssh root@192.168.1.1
+opkg --version 2>/dev/null || apk --version   # opkg = OpenWrt ≤ 24.10, apk = ≥ 25.12
+```
+
+Then pull the release straight onto the box and install. **opkg** firmware:
+
+```sh
+V=1.2.1; B=https://github.com/c2h2/luci-app-photondns/releases/download/v$V
+cd /tmp
+wget "$B/photondns_${V}_aarch64_generic.ipk" "$B/luci-app-photondns_${V}_all.ipk"
+opkg update                     # needed so the LuCI app's deps resolve
+opkg install ./photondns_${V}_aarch64_generic.ipk ./luci-app-photondns_${V}_all.ipk
+```
+
+**apk** firmware (OpenWrt ≥ 25.12) — same files, `.apk` extension:
+
+```sh
+V=1.2.1; B=https://github.com/c2h2/luci-app-photondns/releases/download/v$V
+cd /tmp
+wget "$B/photondns_${V}_aarch64_generic.apk" "$B/luci-app-photondns_${V}_all.apk"
+apk update
+apk add --allow-untrusted ./photondns_${V}_aarch64_generic.apk ./luci-app-photondns_${V}_all.apk
+```
+
+Enable and start it:
+
+```sh
+uci set photondns.main.enabled=1; uci commit photondns
+/etc/init.d/photondns enable; /etc/init.d/photondns restart
+nslookup example.com 127.0.0.1 -port=15533     # or: dig @127.0.0.1 -p 15533 example.com
+```
+
+Open LuCI → Services → photondns, then turn on *DNS Forward* so the router
+hands out photondns instead of dnsmasq (the dnsmasq config is backed up and
+restored when you turn it off).
+
+Notes:
+
+- The LuCI app depends on `curl`, `rpcd` and `rpcd-mod-ucode`; `opkg update` /
+  `apk update` first, or the install fails on unresolved deps.
+- If the firmware's LuCI is too old for the JS client, install
+  `luci-app-photondns-compat_${V}_all.ipk` instead (legacy Lua/CBI UI).
+- If `wget` on the device can't do HTTPS, download on your laptop and
+  `scp *.ipk root@192.168.1.1:/tmp/` instead.
+- Building from source instead: `aarch64-unknown-linux-musl` is already
+  `deploy.sh`'s default target, so
+  `cargo zigbuild --release --target aarch64-unknown-linux-musl && ./deploy.sh root@192.168.1.1`
+  pushes daemon + LuCI app over SSH.
+
 ## Repository layout
 
 ```

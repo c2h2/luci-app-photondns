@@ -195,6 +195,63 @@ dig @192.168.1.1 -p 15533 example.com
 然后打开 LuCI → 服务 → photondns。开启 *DNS 转发* 即可接管系统解析
 （dnsmasq 原配置会自动备份并在关闭时恢复）。
 
+## 在 photonicat2 上安装
+
+Ariaboard **photonicat2** 是基于 OpenWrt 的路由器，四核 Cortex-A55（RK3568），
+即 **aarch64**，软件包架构为 `aarch64_generic`。上面表格里约 90,000 qps 的本机
+成绩就是在这台设备上测的。
+
+先 SSH 登录（用你自己盒子的 LAN 地址，没改过就是出厂地址），确认固件用的是哪个
+包管理器——这决定装 `.ipk` 还是 `.apk`：
+
+```sh
+ssh root@192.168.1.1
+opkg --version 2>/dev/null || apk --version   # opkg = OpenWrt ≤ 24.10，apk = ≥ 25.12
+```
+
+然后直接在盒子上拉取 release 并安装。**opkg** 固件：
+
+```sh
+V=1.2.1; B=https://github.com/c2h2/luci-app-photondns/releases/download/v$V
+cd /tmp
+wget "$B/photondns_${V}_aarch64_generic.ipk" "$B/luci-app-photondns_${V}_all.ipk"
+opkg update                     # 必须，否则 LuCI 应用的依赖装不上
+opkg install ./photondns_${V}_aarch64_generic.ipk ./luci-app-photondns_${V}_all.ipk
+```
+
+**apk** 固件（OpenWrt ≥ 25.12）——同样的文件，换成 `.apk`：
+
+```sh
+V=1.2.1; B=https://github.com/c2h2/luci-app-photondns/releases/download/v$V
+cd /tmp
+wget "$B/photondns_${V}_aarch64_generic.apk" "$B/luci-app-photondns_${V}_all.apk"
+apk update
+apk add --allow-untrusted ./photondns_${V}_aarch64_generic.apk ./luci-app-photondns_${V}_all.apk
+```
+
+启用并启动：
+
+```sh
+uci set photondns.main.enabled=1; uci commit photondns
+/etc/init.d/photondns enable; /etc/init.d/photondns restart
+nslookup example.com 127.0.0.1 -port=15533     # 或：dig @127.0.0.1 -p 15533 example.com
+```
+
+打开 LuCI → 服务 → photondns，开启 *DNS 转发*，路由器就会把 photondns 作为系统
+解析器下发给客户端（dnsmasq 原配置会备份，关闭时自动恢复）。
+
+补充：
+
+- LuCI 应用依赖 `curl`、`rpcd`、`rpcd-mod-ucode`，务必先 `opkg update` /
+  `apk update`，否则会因依赖未解析而安装失败。
+- 如果固件的 LuCI 太旧、不支持 JS 客户端，改装
+  `luci-app-photondns-compat_${V}_all.ipk`（传统 Lua/CBI 界面）。
+- 如果设备上的 `wget` 不支持 HTTPS，就在电脑上下载好，再
+  `scp *.ipk root@192.168.1.1:/tmp/`。
+- 从源码构建：`deploy.sh` 的默认目标就是 `aarch64-unknown-linux-musl`，所以
+  `cargo zigbuild --release --target aarch64-unknown-linux-musl && ./deploy.sh root@192.168.1.1`
+  即可把守护进程和 LuCI 应用一并推送过去。
+
 ## 仓库结构
 
 ```
