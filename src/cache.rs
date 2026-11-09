@@ -34,6 +34,8 @@ pub struct CacheEntry {
     pub refreshing: AtomicBool,
     /// unix seconds when stored (for dump/restore)
     pub stored_unix: u64,
+    /// upstream that produced this answer ("" = unknown, e.g. old dump)
+    pub upstream: Box<str>,
 }
 
 pub enum Freshness {
@@ -211,7 +213,9 @@ impl DnsCache {
     /// Persist non-expired entries. Format:
     /// magic "PHOTONDC" u8 version, u64 count, then per entry:
     /// u16 key_len, key, u64 stored_unix, u32 ttl, u32 stale_ttl,
-    /// u16 question_len, u16 n_offsets, offsets..., u32 data_len, data.
+    /// u16 question_len, u16 n_offsets, offsets..., u32 data_len, data,
+    /// and since version 2: u8 upstream_len, upstream. Version 1 dumps
+    /// still load (upstream unknown).
     pub fn dump(&self, path: &str) -> std::io::Result<usize> {
         use std::io::Write;
         let now = Instant::now();
@@ -227,7 +231,7 @@ impl DnsCache {
         let tmp = format!("{}.tmp", path);
         let mut f = std::io::BufWriter::new(std::fs::File::create(&tmp)?);
         f.write_all(b"PHOTONDC")?;
-        f.write_all(&[1u8])?;
+        f.write_all(&[2u8])?;
         f.write_all(&(entries.len() as u64).to_be_bytes())?;
         for (k, e) in &entries {
             f.write_all(&(k.len() as u16).to_be_bytes())?;
@@ -242,6 +246,9 @@ impl DnsCache {
             }
             f.write_all(&(e.data.len() as u32).to_be_bytes())?;
             f.write_all(&e.data)?;
+            let up = &e.upstream.as_bytes()[..e.upstream.len().min(255)];
+            f.write_all(&[up.len() as u8])?;
+            f.write_all(up)?;
         }
         f.into_inner()?.sync_all().ok();
         std::fs::rename(&tmp, path)?;
@@ -251,9 +258,10 @@ impl DnsCache {
     pub fn load(&self, path: &str) -> std::io::Result<usize> {
         let data = std::fs::read(path)?;
         let bad = || std::io::Error::new(std::io::ErrorKind::InvalidData, "bad cache dump");
-        if data.len() < 17 || &data[0..8] != b"PHOTONDC" || data[8] != 1 {
+        if data.len() < 17 || &data[0..8] != b"PHOTONDC" || !(1..=2).contains(&data[8]) {
             return Err(bad());
         }
+        let version = data[8];
         let unix_now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -297,6 +305,15 @@ impl DnsCache {
             need(dlen, pos)?;
             let bytes = data[pos..pos + dlen].to_vec();
             pos += dlen;
+            let mut upstream = String::new();
+            if version >= 2 {
+                need(1, pos)?;
+                let ulen = data[pos] as usize;
+                pos += 1;
+                need(ulen, pos)?;
+                upstream = String::from_utf8_lossy(&data[pos..pos + ulen]).into_owned();
+                pos += ulen;
+            }
 
             let age = unix_now.saturating_sub(stored_unix) as u32;
             if age >= ttl.saturating_add(stale_ttl) {
@@ -314,6 +331,7 @@ impl DnsCache {
                 hits: AtomicU32::new(0),
                 refreshing: AtomicBool::new(false),
                 stored_unix,
+                upstream: upstream.into_boxed_str(),
             };
             self.insert(key, entry);
             loaded += 1;
@@ -348,6 +366,7 @@ mod tests {
                     .duration_since(UNIX_EPOCH)
                     .unwrap()
                     .as_secs(),
+                upstream: "tcp://1.1.1.1".into(),
             },
         )
     }
@@ -438,6 +457,9 @@ mod tests {
         let loaded = cache2.load(&path).unwrap();
         assert_eq!(loaded, 5);
         assert_eq!(cache2.len(), 5);
+        let (k0, _) = entry_for("host0.example.com", 600, 600);
+        let (e0, _) = cache2.get(&k0, Instant::now()).unwrap();
+        assert_eq!(&*e0.upstream, "tcp://1.1.1.1", "upstream survives dump/load");
         std::fs::remove_file(&path).ok();
     }
 

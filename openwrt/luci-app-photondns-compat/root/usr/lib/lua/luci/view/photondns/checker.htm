@@ -99,7 +99,7 @@
 			var ups = '', i;
 			for (i = 0; i < (x.upstreams || []).length; i++) ups += '<div>' + mono(x.upstreams[i]) + '</div>';
 			for (i = 0; i < (x.backups || []).length; i++)
-				ups += '<div>' + mono(x.backups[i]) + ' <span style="opacity:.6"><%:(backup)%></span></div>';
+				ups += '<div>' + mono(x.backups[i]) + ' <span style="opacity:.6"><%:(backup - only used when all primaries time out)%></span></div>';
 			rows.push(['<%:Group upstreams%>', ups]);
 			if (x.aaaa_mode) rows.push(['<%:IPv6 (AAAA) mode%>', esc(x.aaaa_mode)]);
 		}
@@ -135,7 +135,7 @@
 				var tags = '';
 				if (r.upstream === answeredBy) tags += pill('<%:answered%>', '#0d6efd');
 				if (r.ok && r.ms === fastest) tags += pill('<%:fastest%>', '#2ca02c');
-				if (r.backup) tags += ' <span style="opacity:.6"><%:(backup)%></span>';
+				if (r.backup) tags += '<div style="opacity:.6; font-size:85%"><%:backup - only used when all primaries time out%></div>';
 				var pct = r.ok ? Math.max(2, Math.round(r.ms / maxMs * 100)) : 0;
 				var time = r.ok
 					? '<div style="min-width:140px"><div style="font-family:monospace">' + r.ms.toFixed(1) + ' ms</div>' +
@@ -202,6 +202,10 @@
 			} else if (d.upstream) {
 				answeredBy = d.upstream;
 				kv('<%:Answered by%>', mono(d.upstream) + ' <span style="opacity:.6"><%:(won the race just now)%></span>');
+			} else if (d.cached_from) {
+				answeredBy = d.cached_from;
+				kv('<%:Answered by%>', mono(answeredBy) + ' <span style="opacity:.6">(<%:cached%>, ' +
+					agoText(Math.floor(new Date().getTime() / 1000) - (d.cached_age || 0)) + ')</span>');
 			} else if (d.last_upstream && (d.route === 'cache' || d.route === 'stale')) {
 				answeredBy = d.last_upstream.upstream;
 				kv('<%:Answered by%>', mono(answeredBy) + ' <span style="opacity:.6">(<%:cached%>, ' +

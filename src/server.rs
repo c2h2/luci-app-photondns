@@ -78,7 +78,13 @@ fn unix_now() -> u64 {
 
 /// Clamp TTLs, extract cache metadata and store the response.
 /// Returns false when the response is not cacheable (nothing was stored).
-fn cache_store(ctx: &Ctx, key: cache::CacheKey, resp: &mut [u8], question_end: usize) -> bool {
+fn cache_store(
+    ctx: &Ctx,
+    key: cache::CacheKey,
+    resp: &mut [u8],
+    question_end: usize,
+    upstream: &str,
+) -> bool {
     let Some(cache) = &ctx.cache else {
         return false;
     };
@@ -112,6 +118,7 @@ fn cache_store(ctx: &Ctx, key: cache::CacheKey, resp: &mut [u8], question_end: u
             hits: AtomicU32::new(0),
             refreshing: AtomicBool::new(false),
             stored_unix: unix_now(),
+            upstream: upstream.into(),
         },
     );
     true
@@ -132,7 +139,7 @@ async fn resolve_upstream(
         Some(rmeta) if rmeta.qname == meta.qname && rmeta.qtype == meta.qtype => {}
         _ => anyhow::bail!("upstream response question mismatch"),
     }
-    cache_store(ctx, key.clone(), &mut resp, meta.question_end);
+    cache_store(ctx, key.clone(), &mut resp, meta.question_end, &winner);
     dns::set_id(&mut resp, meta.id);
     Ok((resp, group.name.clone(), winner))
 }
@@ -405,6 +412,10 @@ async fn resolve_redirect(
 pub struct ResolveResult {
     pub route: String,
     pub upstream: String,
+    /// for cache/stale answers: the upstream that filled the entry, and
+    /// how many seconds ago
+    pub cached_from: String,
+    pub cached_age: u64,
     pub rcode: u8,
     pub ips: Vec<std::net::IpAddr>,
     pub ttl: u32,
@@ -432,6 +443,14 @@ pub async fn resolve_named(ctx: &Arc<Ctx>, name: &str, qtype: u16) -> Result<Res
         ips: dns::extract_ips(resp, meta.question_end),
         ttl: dns::min_answer_ttl(resp, meta.question_end, 0),
         elapsed: start.elapsed(),
+        cached_from: String::new(),
+        cached_age: 0,
+    };
+    let from_cache = |route: &str, entry: &CacheEntry, resp: &[u8]| {
+        let mut r = mk(route, "", resp);
+        r.cached_from = entry.upstream.to_string();
+        r.cached_age = unix_now().saturating_sub(entry.stored_unix);
+        r
     };
 
     // local routing decisions
@@ -467,11 +486,11 @@ pub async fn resolve_named(ctx: &Arc<Ctx>, name: &str, qtype: u16) -> Result<Res
             match freshness {
                 Freshness::Fresh { .. } => {
                     let r = entry.make_response(&query, &meta, now, ctx.cfg.cache.stale_client_ttl);
-                    return Ok(mk("cache", "", &r));
+                    return Ok(from_cache("cache", &entry, &r));
                 }
                 Freshness::Stale if ctx.cfg.cache.serve_stale => {
                     let r = entry.make_response(&query, &meta, now, ctx.cfg.cache.stale_client_ttl);
-                    return Ok(mk("stale", "", &r));
+                    return Ok(from_cache("stale", &entry, &r));
                 }
                 Freshness::Stale => {}
             }
@@ -856,14 +875,19 @@ pub fn spawn_refresher(ctx: Arc<Ctx>, mut rx: mpsc::Receiver<RefreshJob>) {
                 };
                 let group = ctx.group_for(&job.qname, job.qtype);
                 match group.resolve(&q, &ctx.stats).await {
-                    Ok((mut resp, _winner)) => {
+                    Ok((mut resp, winner)) => {
                         // find question_end of the *response*, and make sure it
                         // answers the question we asked (name *and* type) before
                         // storing it under job.key, which encodes both.
                         match dns::parse_query(&resp) {
                             Some(rmeta) if rmeta.qname == job.qname && rmeta.qtype == job.qtype => {
-                                if cache_store(&ctx, job.key.clone(), &mut resp, rmeta.question_end)
-                                {
+                                if cache_store(
+                                    &ctx,
+                                    job.key.clone(),
+                                    &mut resp,
+                                    rmeta.question_end,
+                                    &winner,
+                                ) {
                                     log::debug!("refreshed {}", job.qname);
                                 } else {
                                     // upstream answered but the response is not
@@ -896,10 +920,10 @@ async fn prewarm_one(ctx: &Arc<Ctx>, name: &str, qtype: u16) {
     let key = cache::make_key(name, qtype, 1);
     let group = ctx.group_for(name, qtype);
     match group.resolve(&q, &ctx.stats).await {
-        Ok((mut resp, _)) => {
+        Ok((mut resp, winner)) => {
             if let Some(rmeta) = dns::parse_query(&resp) {
                 if rmeta.qname == name && rmeta.qtype == qtype {
-                    cache_store(ctx, key, &mut resp, rmeta.question_end);
+                    cache_store(ctx, key, &mut resp, rmeta.question_end, &winner);
                 }
             }
         }

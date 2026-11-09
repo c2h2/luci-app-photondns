@@ -57,6 +57,22 @@ The cold pass exercises the real forwarding/failover path — point the config
 at a local stub upstream unless you want to send N random domains to a
 public resolver.
 
+## Recent changes (November 2026)
+
+- **Backups only on real timeouts** — backup upstreams (e.g. a China DNS
+  behind the overseas group) no longer race healthy primaries and are never
+  asked when a primary answers SERVFAIL/REFUSED, so overseas names are not
+  leaked to them; they take over only when every primary is down or times
+  out.
+- **No false "down" from broken names** — a SERVFAIL/REFUSED for a client
+  query no longer counts against the upstream (the health probe still
+  does), and a timeout counts only if that upstream answered nothing else
+  meanwhile. Before, one client hammering a lame domain could take a whole
+  group down at once.
+- **Cache remembers its upstream** — every cache entry (incl. background
+  refreshes and prewarm) records which upstream answered; the Cache Lookup
+  page shows it.
+
 ## Recent changes (July 2026)
 
 - **Cache lookup page** — new `/cachekeys` API and LuCI page: type a domain

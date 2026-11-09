@@ -23,6 +23,8 @@ pub struct UpstreamState {
     /// unix ms until which a down upstream stays excluded (then half-open)
     cooldown_until_ms: AtomicU64,
     pub down_events: AtomicU64,
+    /// unix ms of the last successful answer (0 = never)
+    last_ok_ms: AtomicU64,
 }
 
 impl UpstreamState {
@@ -37,6 +39,7 @@ impl UpstreamState {
             last_rtt_us: AtomicU64::new(0),
             cooldown_until_ms: AtomicU64::new(0),
             down_events: AtomicU64::new(0),
+            last_ok_ms: AtomicU64::new(0),
         }
     }
 
@@ -44,6 +47,7 @@ impl UpstreamState {
         let us = rtt.as_micros() as u64;
         self.last_rtt_us.store(us, Ordering::Relaxed);
         self.ok.fetch_add(1, Ordering::Relaxed);
+        self.last_ok_ms.store(unix_ms(), Ordering::Relaxed);
         self.consec_fail.store(0, Ordering::Relaxed);
         let old = self.ewma_us.load(Ordering::Relaxed);
         let new = if old == 0 { us } else { (old * 7 + us) / 8 };
@@ -82,6 +86,18 @@ impl UpstreamState {
                 .store(unix_ms() + cooldown.as_millis() as u64, Ordering::Relaxed);
         }
         false
+    }
+
+    /// Unix ms "now" on the clock `answered_since` compares against.
+    pub fn now_ms() -> u64 {
+        unix_ms()
+    }
+
+    /// Did this upstream deliver a good answer at or after `since_ms`? An
+    /// upstream answering other queries is alive, so a timeout on one name
+    /// in that window is the name's fault, not the upstream's.
+    pub fn answered_since(&self, since_ms: u64) -> bool {
+        self.last_ok_ms.load(Ordering::Relaxed) >= since_ms
     }
 
     /// Available = healthy, or down but past cooldown (half-open trial).

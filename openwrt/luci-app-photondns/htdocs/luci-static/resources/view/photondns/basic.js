@@ -436,7 +436,7 @@ return view.extend({
 		o.default = '15';
 
 		o = s.taboption('failover', form.DynamicList, 'backup_upstream', _('Backup DNS servers'),
-			_('Only used when primary servers fail; also raced as a last hedge candidate'));
+			_('Only used when every primary server is down or times out - never raced against healthy primaries, and never asked when a primary answers SERVFAIL/REFUSED (the name itself is broken)'));
 		o.value('tls://223.5.5.5', _('AliDNS (DoT)'));
 		o.value('tls://8.8.8.8', _('Google (DoT)'));
 		o.value('tls://1.1.1.1', _('Cloudflare (DoT)'));

@@ -315,6 +315,10 @@ pub async fn run(ctx: Arc<Ctx>, listen: String) -> Result<()> {
                                     "elapsed_ms": (r.elapsed.as_micros() as f64 / 1000.0 * 100.0).round() / 100.0,
                                     "explain": explain_json(&ctx, &name, qtype),
                                 });
+                                if !r.cached_from.is_empty() {
+                                    v["cached_from"] = json!(r.cached_from);
+                                    v["cached_age"] = json!(r.cached_age);
+                                }
                                 // answered from cache: say who filled it, if
                                 // the query log still remembers
                                 if let Some((up, ts, ms)) =

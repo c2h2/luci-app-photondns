@@ -238,7 +238,7 @@ msgstr ""
 msgid "Backup DNS servers"
 msgstr ""
 
-msgid "Only used when primary servers fail; also raced as a last hedge candidate"
+msgid "Only used when every primary server is down or times out - never raced against healthy primaries, and never asked when a primary answers SERVFAIL/REFUSED (the name itself is broken)"
 msgstr ""
 
 msgid "Local-domain DNS servers"
@@ -1122,4 +1122,13 @@ msgid "Type a domain to search what photondns currently has cached. The 15 close
 msgstr ""
 
 msgid "cached"
+msgstr ""
+
+msgid "(cached answer, fetched %s)"
+msgstr ""
+
+msgid "backup - only used when all primaries time out"
+msgstr ""
+
+msgid "(backup - only used when all primaries time out)"
 msgstr ""

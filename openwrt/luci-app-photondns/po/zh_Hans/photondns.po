@@ -241,8 +241,8 @@ msgstr "支持格式：1.2.3.4、udp://主机、tcp://主机、tls://主机（Do
 msgid "Backup DNS servers"
 msgstr "备用 DNS 服务器"
 
-msgid "Only used when primary servers fail; also raced as a last hedge candidate"
-msgstr "仅在主服务器故障时使用；同时作为最后的对冲竞速候选"
+msgid "Only used when every primary server is down or times out - never raced against healthy primaries, and never asked when a primary answers SERVFAIL/REFUSED (the name itself is broken)"
+msgstr "仅在所有主服务器不可用或超时时使用 — 不会与健康的主服务器竞速；主服务器返回 SERVFAIL/REFUSED（域名本身有问题）时也不会询问备用"
 
 msgid "Local-domain DNS servers"
 msgstr "本地域名 DNS 服务器"
@@ -1136,3 +1136,12 @@ msgstr "输入域名，搜索 photondns 当前缓存的内容。输入时显示�
 
 msgid "cached"
 msgstr "缓存"
+
+msgid "(cached answer, fetched %s)"
+msgstr "（缓存应答，%s获取）"
+
+msgid "backup - only used when all primaries time out"
+msgstr "备用 — 仅在所有主上游超时时使用"
+
+msgid "(backup - only used when all primaries time out)"
+msgstr "（备用 — 仅在所有主上游超时时使用）"

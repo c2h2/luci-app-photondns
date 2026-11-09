@@ -405,7 +405,7 @@ o.datatype = "and(uinteger,min(1))"
 o.default = "15"
 
 o = s:taboption("failover", DynamicList, "backup_upstream", translate("Backup DNS servers"),
-	translate("Only used when primary servers fail; also raced as a last hedge candidate"))
+	translate("Only used when every primary server is down or times out - never raced against healthy primaries, and never asked when a primary answers SERVFAIL/REFUSED (the name itself is broken)"))
 o:value("tls://223.5.5.5", translate("AliDNS (DoT)"))
 o:value("tls://8.8.8.8", translate("Google (DoT)"))
 o:value("tls://1.1.1.1", translate("Cloudflare (DoT)"))

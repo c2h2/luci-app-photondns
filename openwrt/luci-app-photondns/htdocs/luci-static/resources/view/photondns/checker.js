@@ -154,6 +154,11 @@ return view.extend({
 			} else if (d.upstream) {
 				rows.push([_('Redirect target'), mono(d.upstream)]);
 				answeredBy = '';
+			} else if (d.cached_from) {
+				answeredBy = d.cached_from;
+				rows.push([_('Answered by'), E('span', {}, [mono(answeredBy), ' ',
+					E('span', { style: 'opacity:.6' }, _('(cached answer, fetched %s)').format(
+						agoText(Math.floor(Date.now() / 1000) - (d.cached_age || 0))))])]);
 			} else if (d.last_upstream && (d.route === 'cache' || d.route === 'stale')) {
 				answeredBy = d.last_upstream.upstream;
 				rows.push([_('Answered by'), E('span', {}, [mono(answeredBy), ' ',
@@ -183,7 +188,7 @@ return view.extend({
 					er.push([_('Group upstreams'), E('div', {},
 						(x.upstreams || []).map(u => E('div', {}, mono(u))).concat(
 						(x.backups || []).map(u => E('div', {}, [mono(u), ' ',
-							E('span', { style: 'opacity:.6' }, _('(backup)'))]))))]);
+							E('span', { style: 'opacity:.6' }, _('(backup - only used when all primaries time out)'))]))))]);
 					if (x.aaaa_mode)
 						er.push([_('IPv6 (AAAA) mode'), _('%s - clients may get an empty AAAA answer').format(x.aaaa_mode)]);
 				}
@@ -237,7 +242,8 @@ return view.extend({
 				if (r.ok && r.ms === fastest)
 					tags.push(E('span', { style: 'margin-left:6px; padding:0 6px; border-radius:8px; color:#fff; font-size:85%; background:#2ca02c' }, _('fastest')));
 				if (r.backup)
-					tags.push(E('span', { style: 'margin-left:6px; opacity:.6' }, _('(backup)')));
+					tags.push(E('div', { style: 'opacity:.6; font-size:85%' },
+						_('backup - only used when all primaries time out')));
 				const pct = r.ok ? Math.max(2, Math.round(r.ms / maxMs * 100)) : 0;
 				const time = r.ok
 					? E('div', { style: 'min-width:140px' }, [

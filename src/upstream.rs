@@ -37,6 +37,22 @@ impl Scheme {
     }
 }
 
+/// The upstream answered, but with SERVFAIL/REFUSED: a real DNS response,
+/// so the group must not treat it like a timeout (no backup fallback).
+#[derive(Debug)]
+pub struct RcodeError {
+    pub upstream: String,
+    pub rcode: u8,
+}
+
+impl std::fmt::Display for RcodeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}: upstream rcode {}", self.upstream, self.rcode)
+    }
+}
+
+impl std::error::Error for RcodeError {}
+
 pub struct Upstream {
     pub addr_str: String,
     pub scheme: Scheme,
@@ -263,6 +279,15 @@ impl Upstream {
     }
 
     /// Query with latency + health accounting (the failover feed).
+    ///
+    /// `probe` = the active health check (a known-good name). Probes are
+    /// strict: SERVFAIL/REFUSED or any error counts against the upstream.
+    /// Client queries are lenient so one broken *name* cannot take every
+    /// upstream down at once:
+    ///   - SERVFAIL/REFUSED is returned as a `RcodeError` (the group tries the
+    ///     others) but is not a health failure - the upstream did answer;
+    ///   - a timeout/transport error counts only if the upstream answered
+    ///     nothing else while this query was pending.
     pub async fn query_measured(
         &self,
         query: &[u8],
@@ -270,22 +295,38 @@ impl Upstream {
         fail_threshold: u32,
         recover_threshold: u32,
         cooldown: Duration,
+        probe: bool,
     ) -> Result<Vec<u8>> {
         let start = Instant::now();
+        let start_ms = crate::health::UpstreamState::now_ms();
         let res = self.query(query, deadline).await;
-        match &res {
+        match res {
             Ok(resp) => {
-                let rc = dns::rcode(resp);
+                let rc = dns::rcode(&resp);
                 if rc == dns::RCODE_SERVFAIL || rc == 5 {
-                    // upstream answered but is broken -> soft failure
-                    self.state
-                        .record_failure(fail_threshold, cooldown, &self.addr_str);
-                    bail!("{}: upstream rcode {}", self.addr_str, rc);
+                    if probe {
+                        self.state
+                            .record_failure(fail_threshold, cooldown, &self.addr_str);
+                    }
+                    return Err(RcodeError {
+                        upstream: self.addr_str.clone(),
+                        rcode: rc,
+                    }
+                    .into());
                 }
                 self.state
                     .record_success(start.elapsed(), recover_threshold, &self.addr_str);
+                Ok(resp)
             }
             Err(e) => {
+                if !probe && self.state.answered_since(start_ms) {
+                    log::debug!(
+                        "{}: query failed ({}) but upstream is answering others; not counted",
+                        self.addr_str,
+                        e
+                    );
+                    return Err(e);
+                }
                 log::debug!("{}: query failed: {}", self.addr_str, e);
                 let went_down = self
                     .state
@@ -297,9 +338,9 @@ impl Upstream {
                     // a possibly dead one forever
                     self.reset_conns();
                 }
+                Err(e)
             }
         }
-        res
     }
 
     /// Drop pooled stream connections so the next query reconnects.
@@ -521,7 +562,8 @@ struct PipeShared {
     pending: Mutex<HashMap<u16, oneshot::Sender<Vec<u8>>>>,
     alive: AtomicBool,
     next_id: AtomicU16,
-    /// µs since `epoch` of the last frame read on this connection
+    /// µs since `epoch` of the last frame read on this connection, stored as
+    /// at least 1 so 0 always means "nothing received yet"
     last_rx_us: AtomicU64,
     epoch: Instant,
     /// flips to true on kill(); both I/O tasks select on it so a dead
@@ -535,9 +577,12 @@ impl PipeShared {
         self.epoch.elapsed().as_micros() as u64
     }
 
-    /// Has any frame arrived at or after `since_us`?
+    /// Has any frame arrived at or after `since_us`? (A query sent in the
+    /// connection's first microsecond has since_us == 0, which must not match
+    /// the "never received" initial value.)
     fn received_since(&self, since_us: u64) -> bool {
-        self.last_rx_us.load(Ordering::Acquire) >= since_us
+        let rx = self.last_rx_us.load(Ordering::Acquire);
+        rx != 0 && rx >= since_us
     }
 
     /// Tear the connection down: fail every waiter (they retry on a fresh
@@ -636,7 +681,7 @@ impl PipeConn {
                     },
                     _ = r_close.changed() => break,
                 };
-                rs.last_rx_us.store(rs.now_us(), Ordering::Release);
+                rs.last_rx_us.store(rs.now_us().max(1), Ordering::Release);
                 if buf.len() >= dns::HEADER_LEN {
                     let id = dns::get_id(&buf);
                     if let Some(tx) = rs.pending.lock().remove(&id) {
