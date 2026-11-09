@@ -3,6 +3,8 @@
 //!   GET /health  200 if running
 //!   GET /flush   clear the cache
 //!   GET /version
+//!   GET /resolve?name=&type=   dig-like resolve + routing explanation
+//!   GET /compare?name=&type=   ask every upstream of the routed group
 
 use crate::server::{resolve_named, Ctx};
 use anyhow::Result;
@@ -104,6 +106,33 @@ fn qtype_name(t: u16) -> String {
 
 /// Build an HTTP/1.1 JSON response. Includes a permissive CORS header so the
 /// bundled test page works when opened directly from disk (file:// origin).
+/// Routing explanation for `name` as JSON (see `Router::explain`), plus the
+/// group's upstream list and any AAAA policy that would apply first.
+fn explain_json(ctx: &Arc<Ctx>, name: &str, qtype: u16) -> serde_json::Value {
+    let qname = name.to_ascii_lowercase();
+    let e = ctx.router.explain(&qname, qtype);
+    let mut v = json!({
+        "action": e.action,
+        "source": e.source,
+        "match": e.match_kind,
+        "rule": e.rule,
+        "target": e.target,
+    });
+    if e.action == "forward" {
+        // a missing "local" group falls back to the first group
+        let g = ctx.group(e.group);
+        v["group"] = json!(g.name);
+        v["group_fallback"] = json!(g.name != e.group);
+        v["strategy"] = json!(format!("{:?}", g.strategy).to_ascii_lowercase());
+        v["upstreams"] = json!(g.upstreams.iter().map(|u| u.addr_str.clone()).collect::<Vec<_>>());
+        v["backups"] = json!(g.backups.iter().map(|u| u.addr_str.clone()).collect::<Vec<_>>());
+        if qtype == crate::dns::TYPE_AAAA && ctx.cfg.routing.aaaa_mode != "allow" {
+            v["aaaa_mode"] = json!(ctx.cfg.routing.aaaa_mode);
+        }
+    }
+    v
+}
+
 fn http_json(status: &str, body: &str) -> String {
     format!(
         "HTTP/1.1 {}\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
@@ -274,17 +303,27 @@ pub async fn run(ctx: Arc<Ctx>, listen: String) -> Result<()> {
                         json!({"error": "missing name"}).to_string()
                     } else if let Some(qtype) = parse_qtype(&qt) {
                         match resolve_named(&ctx, &name, qtype).await {
-                            Ok(r) => json!({
-                                "name": name,
-                                "type": qt.to_ascii_uppercase(),
-                                "route": r.route,
-                                "upstream": r.upstream,
-                                "rcode": rcode_name(r.rcode),
-                                "answers": r.ips.iter().map(|ip| ip.to_string()).collect::<Vec<_>>(),
-                                "ttl": r.ttl,
-                                "elapsed_ms": (r.elapsed.as_micros() as f64 / 1000.0 * 100.0).round() / 100.0,
-                            })
-                            .to_string(),
+                            Ok(r) => {
+                                let mut v = json!({
+                                    "name": name,
+                                    "type": qt.to_ascii_uppercase(),
+                                    "route": r.route,
+                                    "upstream": r.upstream,
+                                    "rcode": rcode_name(r.rcode),
+                                    "answers": r.ips.iter().map(|ip| ip.to_string()).collect::<Vec<_>>(),
+                                    "ttl": r.ttl,
+                                    "elapsed_ms": (r.elapsed.as_micros() as f64 / 1000.0 * 100.0).round() / 100.0,
+                                    "explain": explain_json(&ctx, &name, qtype),
+                                });
+                                // answered from cache: say who filled it, if
+                                // the query log still remembers
+                                if let Some((up, ts, ms)) =
+                                    ctx.qlog.last_upstream(&name.to_ascii_lowercase(), qtype)
+                                {
+                                    v["last_upstream"] = json!({"upstream": up, "ts": ts, "rtt_ms": ms});
+                                }
+                                v.to_string()
+                            }
                             Err(e) => json!({
                                 "name": name,
                                 "type": qt.to_ascii_uppercase(),
@@ -301,6 +340,57 @@ pub async fn run(ctx: Arc<Ctx>, listen: String) -> Result<()> {
                         .await;
                     return;
                 }
+                // GET /compare?name=<domain>&type=<A|...>  -> query every
+                // upstream (backups too) of the group this name routes to
+                if path.starts_with("/compare?") || path == "/compare" {
+                    let name = query_param(path, "name").unwrap_or_default();
+                    let qt = query_param(path, "type").unwrap_or_else(|| "A".into());
+                    let name = name.trim().trim_end_matches('.').to_string();
+                    let body = match (name.is_empty(), parse_qtype(&qt)) {
+                        (true, _) => json!({"error": "missing name"}),
+                        (_, None) => json!({"error": format!("unknown type '{}'", qt)}),
+                        (false, Some(qtype)) => {
+                            let ex = explain_json(&ctx, &name, qtype);
+                            match crate::dns::build_query(&name, qtype, crate::dns::CLASS_IN)
+                                .and_then(|q| crate::dns::parse_query(&q).map(|m| (q, m)))
+                            {
+                                None => json!({"error": "invalid name"}),
+                                Some((q, m)) => {
+                                    // a name that never reaches an upstream
+                                    // still compares the group it would use
+                                    let g = ctx.group(ex["group"].as_str().unwrap_or("main"));
+                                    let results: Vec<_> = g
+                                        .compare(&q, m.question_end)
+                                        .await
+                                        .into_iter()
+                                        .map(|r| json!({
+                                            "upstream": r.upstream,
+                                            "backup": r.backup,
+                                            "ok": r.ok,
+                                            "ms": r.ms,
+                                            "rcode": if r.ok { rcode_name(r.rcode) } else { "" },
+                                            "answers": r.answers.iter().map(|ip| ip.to_string()).collect::<Vec<_>>(),
+                                            "error": r.error,
+                                            "ewma_ms": (r.ewma_ms * 10.0).round() / 10.0,
+                                            "healthy": r.healthy,
+                                        }))
+                                        .collect();
+                                    json!({
+                                        "name": name,
+                                        "type": qt.to_ascii_uppercase(),
+                                        "group": g.name,
+                                        "results": results,
+                                    })
+                                }
+                            }
+                        }
+                    };
+                    let _ = stream
+                        .write_all(http_json("200 OK", &body.to_string()).as_bytes())
+                        .await;
+                    return;
+                }
+
                 let (status, body) = match path {
                     "/stats" | "/" => ("200 OK", stats_json(&ctx).to_string()),
                     "/health" => ("200 OK", json!({"status": "ok"}).to_string()),

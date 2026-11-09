@@ -17,6 +17,21 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+/// One upstream's answer in a `Group::compare` run.
+pub struct CompareResult {
+    pub upstream: String,
+    pub backup: bool,
+    /// got a DNS response (any rcode) before the deadline
+    pub ok: bool,
+    pub ms: f64,
+    pub rcode: u8,
+    pub answers: Vec<std::net::IpAddr>,
+    pub error: String,
+    /// the failover engine's smoothed latency for this upstream
+    pub ewma_ms: f64,
+    pub healthy: bool,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Strategy {
     Race,
@@ -258,6 +273,45 @@ impl Group {
             }
         }
         Err(last_err.unwrap_or_else(|| anyhow!("group {}: all upstreams failed", self.name)))
+    }
+
+    /// Diagnostics: send `query` to every upstream (backups included) at
+    /// once and report each one's own answer and latency. Bypasses health
+    /// accounting so a manual comparison never trips the circuit breaker.
+    pub async fn compare(&self, query: &[u8], question_end: usize) -> Vec<CompareResult> {
+        let deadline = Instant::now() + self.timeout.min(Duration::from_secs(4));
+        let n_primary = self.upstreams.len();
+        let probes = self.all_upstreams().enumerate().map(|(i, u)| {
+            let u = u.clone();
+            async move {
+                let start = Instant::now();
+                let res = u.query(query, deadline).await;
+                let ms = (start.elapsed().as_micros() as f64 / 10.0).round() / 100.0;
+                let mut r = CompareResult {
+                    upstream: u.addr_str.clone(),
+                    backup: i >= n_primary,
+                    ok: false,
+                    ms,
+                    rcode: 0,
+                    answers: Vec::new(),
+                    error: String::new(),
+                    ewma_ms: u.state.ewma_ms(),
+                    healthy: u.state.is_healthy(),
+                };
+                match res {
+                    Ok(resp) => {
+                        r.ok = true;
+                        r.rcode = crate::dns::rcode(&resp);
+                        r.answers = crate::dns::extract_ips(&resp, question_end);
+                    }
+                    Err(e) => r.error = e.to_string(),
+                }
+                r
+            }
+        });
+        let mut out = futures::future::join_all(probes).await;
+        out.sort_by(|a, b| b.ok.cmp(&a.ok).then(a.ms.total_cmp(&b.ms)));
+        out
     }
 
     /// All upstreams incl. backups (for probing/stats).

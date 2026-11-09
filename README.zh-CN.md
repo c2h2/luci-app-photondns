@@ -105,7 +105,8 @@ cargo build --release
   bootstrap 解析
 - 缓存：容量可配（默认 65536 条）、TTL 钳制与倍增、**过期兜底
   （serve-stale）**、**热点预取**、**预热列表**、重启后持久化、
-  实时缓存查询页
+  实时缓存查询页（同时显示分流原因：命中哪条规则、完全 / 后缀匹配、
+  自定义规则还是国内 / 广告列表，并并排对比该分组所有上游的速度，`/compare`）
 - 故障切换策略：`race`（默认）、`fastest`、`parallel`、`sequential`、
   `random`；自适应对冲延迟、熔断器、主动健康探测
 - 规则：hosts、拦截（NXDOMAIN）、重定向、本地域名分流
@@ -122,7 +123,8 @@ cargo build --release
 - 特殊 TLD（`.local`/`.lan`）与内网 PTR 保护，可选拒绝 HTTPS/SVCB
   type-65 查询
 - HTTP JSON API：`/stats`、`/flush`、`/log`、`/health`、`/version`、
-  `/cachekeys`（缓存实时自动补全）、
+  `/cachekeys`（缓存实时自动补全）、`/compare?name=…&type=…`（向分组内
+  所有上游同时查询，对比延迟与应答）、
   `/resolve?name=…&type=…`（dig 风格诊断，显示路由与胜出上游）
 - 双语 LuCI 应用（English / 简体中文）：实时仪表盘、设置、规则编辑器、
   日志查看器；支持 dnsmasq 接管与防火墙 DNS 劫持

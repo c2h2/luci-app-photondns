@@ -121,7 +121,9 @@ public resolver.
   bootstrap resolution
 - Cache: configurable size (default 65536 entries), TTL clamping + multiplier,
   **serve-stale**, **prefetch**, **prewarm list**, persistence across
-  restarts, live cache lookup page
+  restarts, live cache lookup page that also explains the routing decision
+  (which rule matched: exact / suffix, own rule file vs China list / ad list)
+  and races every upstream of the group side by side (`/compare`)
 - Failover strategies: `race` (default), `fastest`, `parallel`,
   `sequential`, `random`; adaptive hedge delay, circuit breaker, health prober
 - Rules: hosts, block (NXDOMAIN), redirect, local-domain routing
@@ -140,7 +142,8 @@ public resolver.
 - Special-TLD (`.local`/`.lan`) and private-PTR protection, optional
   HTTPS/SVCB type-65 rejection
 - HTTP JSON API: `/stats`, `/flush`, `/log`, `/health`, `/version`,
-  `/cachekeys` (live cache autocomplete),
+  `/cachekeys` (live cache autocomplete), `/compare?name=…&type=…` (ask
+  every upstream of the routed group, latency + answers),
   `/resolve?name=…&type=…` (dig-like diagnostics with route + upstream)
 - Bilingual LuCI app (English / 简体中文): live dashboard, settings, rule
   editor, log viewer; dnsmasq takeover and firewall DNS hijack options

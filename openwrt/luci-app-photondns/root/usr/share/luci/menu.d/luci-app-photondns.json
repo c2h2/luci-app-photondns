@@ -28,7 +28,7 @@
 	},
 	"admin/services/photondns/querylog": {
 		"title": "Query Log",
-		"order": 7,
+		"order": 8,
 		"action": {
 			"type": "view",
 			"path": "photondns/querylog"
@@ -52,7 +52,7 @@
 	},
 	"admin/services/photondns/checker": {
 		"title": "Cache Lookup",
-		"order": 17,
+		"order": 7,
 		"action": {
 			"type": "view",
 			"path": "photondns/checker"

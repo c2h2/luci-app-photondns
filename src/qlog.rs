@@ -77,6 +77,16 @@ impl QueryLog {
         });
     }
 
+    /// Newest logged upstream answer for `qname`/`qtype`: (upstream, unix ts,
+    /// rtt ms). Lets the cache-lookup page say who filled a cached entry.
+    pub fn last_upstream(&self, qname: &str, qtype: u16) -> Option<(String, u64, f64)> {
+        let buf = self.buf.lock();
+        buf.iter()
+            .rev()
+            .find(|e| e.qtype == qtype && !e.upstream.is_empty() && e.qname == qname)
+            .map(|e| (e.upstream.clone(), e.ts, (e.rtt_us as f64 / 100.0).round() / 10.0))
+    }
+
     /// Up to `n` newest entries, newest first.
     pub fn snapshot(&self, n: usize) -> Vec<serde_json::Value> {
         let buf = self.buf.lock();

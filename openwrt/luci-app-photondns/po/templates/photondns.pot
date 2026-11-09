@@ -943,3 +943,183 @@ msgstr ""
 
 msgid "SO_MARK value set on upstream sockets of bypassing groups. Passwall / Passwall2 skip mark 255 (0xff)"
 msgstr ""
+
+msgid "Reject HTTPS/SVCB (type 65) setting"
+msgstr ""
+
+msgid "Hosts rule file"
+msgstr ""
+
+msgid "Redirect rule file"
+msgstr ""
+
+msgid "LAN client name (DHCP lease / LAN hosts)"
+msgstr ""
+
+msgid "LAN client reverse lookup"
+msgstr ""
+
+msgid "Block rule file"
+msgstr ""
+
+msgid "Ad block list"
+msgstr ""
+
+msgid "Special-use TLD protection (.local, .lan, ...)"
+msgstr ""
+
+msgid "Private address PTR protection"
+msgstr ""
+
+msgid "Local Domains rule file"
+msgstr ""
+
+msgid "China domain list (geosite:cn)"
+msgstr ""
+
+msgid "No rule matched (default group)"
+msgstr ""
+
+msgid "Exact (full: entry)"
+msgstr ""
+
+msgid "Exact name"
+msgstr ""
+
+msgid "Suffix (domain and all subdomains)"
+msgstr ""
+
+msgid "%ds ago"
+msgstr ""
+
+msgid "%dm ago"
+msgstr ""
+
+msgid "%dh ago"
+msgstr ""
+
+msgid "%s matched no routing rule, so it goes to the default group \"%s\"."
+msgstr ""
+
+msgid "%s matched %s rule %s in %s, so it goes to group \"%s\"."
+msgstr ""
+
+msgid "exact"
+msgstr ""
+
+msgid "suffix"
+msgstr ""
+
+msgid "Type 65 (HTTPS/SVCB) queries are rejected by the \"Reject type 65\" setting."
+msgstr ""
+
+msgid "%s matched %s rule %s in %s, so it is answered NXDOMAIN."
+msgstr ""
+
+msgid "%s is in the hosts rule file and answers %s directly."
+msgstr ""
+
+msgid "%s is redirected to %s by the redirect rule file."
+msgstr ""
+
+msgid "%s is a known LAN client and answers %s locally."
+msgstr ""
+
+msgid "Answered by"
+msgstr ""
+
+msgid "(won the race just now)"
+msgstr ""
+
+msgid "Redirect target"
+msgstr ""
+
+msgid "(cached; filled %s, %s ms)"
+msgstr ""
+
+msgid "Why this route"
+msgstr ""
+
+msgid "Decision"
+msgstr ""
+
+msgid "forward to group"
+msgstr ""
+
+msgid "Rule source"
+msgstr ""
+
+msgid "Match type"
+msgstr ""
+
+msgid "Matched rule"
+msgstr ""
+
+msgid "Rule target"
+msgstr ""
+
+msgid "Note"
+msgstr ""
+
+msgid "No \"local\" group is configured, so the default group is used."
+msgstr ""
+
+msgid "Group upstreams"
+msgstr ""
+
+msgid "(backup)"
+msgstr ""
+
+msgid "IPv6 (AAAA) mode"
+msgstr ""
+
+msgid "%s - clients may get an empty AAAA answer"
+msgstr ""
+
+msgid "Upstream comparison"
+msgstr ""
+
+msgid "Run again"
+msgstr ""
+
+msgid "This name never reaches an upstream; showing how the default group would answer it."
+msgstr ""
+
+msgid "Asks every upstream of the group at the same time, bypassing the cache, so you can compare speed and answers. Does not affect failover health."
+msgstr ""
+
+msgid "Querying all upstreams..."
+msgstr ""
+
+msgid "Avg (EWMA)"
+msgstr ""
+
+msgid "Health"
+msgstr ""
+
+msgid "answered"
+msgstr ""
+
+msgid "fastest"
+msgstr ""
+
+msgid "failed"
+msgstr ""
+
+msgid "healthy"
+msgstr ""
+
+msgid "down"
+msgstr ""
+
+msgid "Group \"%s\" - %d upstreams"
+msgstr ""
+
+msgid "Type a domain to search what photondns currently has cached. The 15 closest cached records appear as you type (↓/↑ to move, Enter to pick); selecting one runs a full resolve (cache-first) and shows the answers, route, TTL and timing, which routing rule sent it there (suffix / exact match, China list, ad list, ...), which upstream answered and a live speed comparison of every upstream in the group. Pressing Enter without a selection resolves exactly what you typed."
+msgstr ""
+
+msgid "Type a domain to search what photondns currently has cached. The 15 closest cached records appear as you type; selecting one runs a full resolve and shows the answers, route, TTL and timing, which routing rule sent it there, which upstream answered and a live speed comparison of every upstream in the group."
+msgstr ""
+
+msgid "cached"
+msgstr ""

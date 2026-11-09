@@ -2,7 +2,7 @@
 
 <h2><%:Cache Lookup%></h2>
 <div class="cbi-map-descr">
-	<%:Type a domain to search what photondns currently has cached. The 15 closest cached records appear as you type; selecting one runs a full resolve and shows the answers, route, TTL and timing.%>
+	<%:Type a domain to search what photondns currently has cached. The 15 closest cached records appear as you type; selecting one runs a full resolve and shows the answers, route, TTL and timing, which routing rule sent it there, which upstream answered and a live speed comparison of every upstream in the group.%>
 </div>
 
 <div id="checker_wrap" style="position:relative; margin:10px 0">
@@ -20,6 +20,28 @@
 (function() {
 	var searchUrl  = '<%=luci.dispatcher.build_url("admin/services/photondns/api/cachekeys")%>';
 	var resolveUrl = '<%=luci.dispatcher.build_url("admin/services/photondns/api/resolve")%>';
+	var compareUrl = '<%=luci.dispatcher.build_url("admin/services/photondns/api/compare")%>';
+
+	var SOURCES = {
+		type65: '<%:Reject HTTPS/SVCB (type 65) setting%>',
+		hosts_file: '<%:Hosts rule file%>',
+		redirect_file: '<%:Redirect rule file%>',
+		lan_leases: '<%:LAN client name (DHCP lease / LAN hosts)%>',
+		lan_ptr: '<%:LAN client reverse lookup%>',
+		block_file: '<%:Block rule file%>',
+		ad_list: '<%:Ad block list%>',
+		special_tld: '<%:Special-use TLD protection (.local, .lan, ...)%>',
+		private_ptr: '<%:Private address PTR protection%>',
+		local_domains_file: '<%:Local Domains rule file%>',
+		china_list: '<%:China domain list (geosite:cn)%>',
+		'default': '<%:No rule matched (default group)%>'
+	};
+	var MATCHES = {
+		full: '<%:Exact (full: entry)%>',
+		exact: '<%:Exact name%>',
+		suffix: '<%:Suffix (domain and all subdomains)%>',
+		none: '-'
+	};
 
 	var ROUTE_COLORS = {
 		cache: '#2ca02c', stale: '#17a2b8', hosts: '#7952b3', lan: '#20c997',
@@ -40,6 +62,99 @@
 		return '<span style="padding:1px 8px; border-radius:8px; color:#fff; font-size:90%; background:' +
 			color + '">' + esc(route || '?') + '</span>';
 	}
+	function mono(t) {
+		return '<span style="font-family:monospace; word-break:break-all">' + esc(t) + '</span>';
+	}
+	function pill(t, color) {
+		return ' <span style="margin-left:6px; padding:0 6px; border-radius:8px; color:#fff; font-size:85%; background:' +
+			color + '">' + esc(t) + '</span>';
+	}
+	function agoText(ts) {
+		var s = Math.max(0, Math.floor(new Date().getTime() / 1000) - ts);
+		if (s < 60) return s + 's';
+		if (s < 3600) return Math.floor(s / 60) + 'm';
+		return Math.floor(s / 3600) + 'h';
+	}
+	function tableOf(rows) {
+		var h = '<table class="table" style="max-width:760px">';
+		for (var i = 0; i < rows.length; i++)
+			h += '<tr class="tr"><td class="td" style="width:150px; font-weight:bold">' + esc(rows[i][0]) +
+				'</td><td class="td" style="word-break:break-all">' + rows[i][1] + '</td></tr>';
+		return h + '</table>';
+	}
+
+	// "why this route" block from the daemon's explain object
+	function explainHtml(x) {
+		var rows = [];
+		rows.push(['<%:Decision%>', x.action === 'forward'
+			? '<%:forward to group%> ' + routeBadge(x.group) : routeBadge(x.action)]);
+		rows.push(['<%:Rule source%>', esc(SOURCES[x.source] || x.source)]);
+		rows.push(['<%:Match type%>', esc(MATCHES[x.match] || x.match || '-')]);
+		if (x.rule) rows.push(['<%:Matched rule%>', mono(x.rule)]);
+		if (x.target) rows.push(['<%:Rule target%>', mono(x.target)]);
+		if (x.action === 'forward') {
+			if (x.group_fallback)
+				rows.push(['<%:Note%>', '<%:No "local" group is configured, so the default group is used.%>']);
+			rows.push(['<%:Strategy%>', esc(x.strategy || '-')]);
+			var ups = '', i;
+			for (i = 0; i < (x.upstreams || []).length; i++) ups += '<div>' + mono(x.upstreams[i]) + '</div>';
+			for (i = 0; i < (x.backups || []).length; i++)
+				ups += '<div>' + mono(x.backups[i]) + ' <span style="opacity:.6"><%:(backup)%></span></div>';
+			rows.push(['<%:Group upstreams%>', ups]);
+			if (x.aaaa_mode) rows.push(['<%:IPv6 (AAAA) mode%>', esc(x.aaaa_mode)]);
+		}
+		return '<h3 style="margin-top:18px"><%:Why this route%></h3>' + tableOf(rows);
+	}
+
+	function runCompare(name, type, answeredBy) {
+		var box = document.getElementById('checker_compare');
+		if (!box) return;
+		box.innerHTML = '<div style="opacity:.6"><%:Querying all upstreams...%></div>';
+		XHR.get(compareUrl, { name: name, type: type }, function(x, res) {
+			var bx = document.getElementById('checker_compare');
+			if (!bx) return;
+			var d = parseRaw(res);
+			if (!d || !d.results) {
+				bx.innerHTML = '<div class="alert-message warning">' +
+					esc((d && d.error) || '<%:No response from photondns (is it running?).%>') + '</div>';
+				return;
+			}
+			var i, r, maxMs = 1, fastest = null;
+			for (i = 0; i < d.results.length; i++) {
+				r = d.results[i];
+				if (!r.ok) continue;
+				if (r.ms > maxMs) maxMs = r.ms;
+				if (fastest === null || r.ms < fastest) fastest = r.ms;
+			}
+			var h = '<div style="margin-bottom:4px"><%:Group%> "' + esc(d.group) + '"</div>' +
+				'<table class="table"><tr class="tr table-titles">' +
+				'<th class="th"><%:Upstream%></th><th class="th"><%:Time%></th><th class="th"><%:Response code%></th>' +
+				'<th class="th"><%:Answers%></th><th class="th"><%:Avg (EWMA)%></th><th class="th"><%:Health%></th></tr>';
+			for (i = 0; i < d.results.length; i++) {
+				r = d.results[i];
+				var tags = '';
+				if (r.upstream === answeredBy) tags += pill('<%:answered%>', '#0d6efd');
+				if (r.ok && r.ms === fastest) tags += pill('<%:fastest%>', '#2ca02c');
+				if (r.backup) tags += ' <span style="opacity:.6"><%:(backup)%></span>';
+				var pct = r.ok ? Math.max(2, Math.round(r.ms / maxMs * 100)) : 0;
+				var time = r.ok
+					? '<div style="min-width:140px"><div style="font-family:monospace">' + r.ms.toFixed(1) + ' ms</div>' +
+					  '<div style="height:6px; border-radius:3px; background:' + (r.ms === fastest ? '#2ca02c' : '#0d6efd') +
+					  '; width:' + pct + '%"></div></div>'
+					: '<span style="color:#d43f3a">' + esc(r.error || '<%:failed%>') + '</span>';
+				h += '<tr class="tr"><td class="td">' + mono(r.upstream) + tags + '</td>' +
+					'<td class="td">' + time + '</td>' +
+					'<td class="td">' + esc(r.rcode || '-') + '</td>' +
+					'<td class="td" style="font-family:monospace; font-size:90%">' +
+						esc((r.answers && r.answers.length) ? r.answers.join(' ') : '-') + '</td>' +
+					'<td class="td">' + (r.ewma_ms ? esc(r.ewma_ms + ' ms') : '-') + '</td>' +
+					'<td class="td"><span style="color:' + (r.healthy ? '#2ca02c' : '#d43f3a') + '">' +
+						(r.healthy ? '<%:healthy%>' : '<%:down%>') + '</span></td></tr>';
+			}
+			bx.innerHTML = h + '</table>';
+		});
+	}
+
 	function parseRaw(res) {
 		if (!res || !res.raw) return null;
 		try { return JSON.parse(res.raw); } catch (e) { return null; }
@@ -81,10 +196,31 @@
 			}
 			kv('<%:Answers%>', answers);
 			if (d.ttl != null) kv('<%:TTL%>', esc(String(d.ttl) + ' s'));
-			if (d.upstream) kv('<%:Upstream%>', esc(d.upstream));
+			var answeredBy = '';
+			if (d.upstream && d.route === 'redirect') {
+				kv('<%:Redirect target%>', mono(d.upstream));
+			} else if (d.upstream) {
+				answeredBy = d.upstream;
+				kv('<%:Answered by%>', mono(d.upstream) + ' <span style="opacity:.6"><%:(won the race just now)%></span>');
+			} else if (d.last_upstream && (d.route === 'cache' || d.route === 'stale')) {
+				answeredBy = d.last_upstream.upstream;
+				kv('<%:Answered by%>', mono(answeredBy) + ' <span style="opacity:.6">(<%:cached%>, ' +
+					agoText(d.last_upstream.ts) + ', ' + esc(String(d.last_upstream.rtt_ms)) + ' ms)</span>');
+			}
 			if (d.elapsed_ms != null) kv('<%:Elapsed%>', esc(String(d.elapsed_ms) + ' ms'));
 			html += '</table>';
+			if (d.explain) html += explainHtml(d.explain);
+			var qn = d.name || name, qt = type || 'A';
+			html += '<h3 style="margin-top:18px"><%:Upstream comparison%> ' +
+				'<button class="cbi-button cbi-button-action" id="checker_rerun" style="margin-left:8px"><%:Run again%></button></h3>' +
+				'<div class="cbi-section-descr" style="margin-bottom:6px">' +
+				((d.explain && d.explain.action !== 'forward')
+					? '<%:This name never reaches an upstream; showing how the default group would answer it.%>'
+					: '<%:Asks every upstream of the group at the same time, bypassing the cache, so you can compare speed and answers. Does not affect failover health.%>') +
+				'</div><div id="checker_compare"></div>';
 			b.innerHTML = html;
+			document.getElementById('checker_rerun').onclick = function() { runCompare(qn, qt, answeredBy); };
+			runCompare(qn, qt, answeredBy);
 		});
 	}
 

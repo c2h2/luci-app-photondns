@@ -14,7 +14,7 @@ use std::sync::Arc;
 // lookups per query. FxHash is ~3-5x faster than the default SipHash for these
 // short ASCII keys, and these sets are never exposed to untrusted key flooding
 // in a way that DoS-hardening (SipHash's purpose) would matter for.
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct DomainSet {
     full: FxHashSet<String>,
     suffix: FxHashSet<String>,
@@ -56,6 +56,26 @@ impl DomainSet {
 
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+
+    /// Which entry matches `name`, for diagnostics: `("full", rule)` for an
+    /// exact `full:` entry, `("suffix", rule)` for the domain itself or a
+    /// parent domain (closest parent wins). Same semantics as `matches`.
+    pub fn find<'a>(&self, name: &'a str) -> Option<(&'static str, &'a str)> {
+        if self.full.contains(name) {
+            return Some(("full", name));
+        }
+        if self.suffix.contains(name) {
+            return Some(("suffix", name));
+        }
+        let mut rest = name;
+        while let Some(i) = rest.find('.') {
+            rest = &rest[i + 1..];
+            if self.suffix.contains(rest) {
+                return Some(("suffix", rest));
+            }
+        }
+        None
     }
 
     /// `name` must be lowercase without trailing dot.
@@ -133,6 +153,11 @@ pub struct Router {
     pub hosts_ttl: u32,
     pub reject_type65: bool,
     special: DomainSet,
+    /// the user's own block / local-domain rule files on their own (small),
+    /// kept only so `explain` can tell them apart from the merged-in ad and
+    /// China lists. Never consulted on the query path.
+    user_block: DomainSet,
+    user_local: DomainSet,
     /// LAN client names from DHCP leases + extra-hosts; swapped in on refresh.
     /// `None` disables the whole feature (no lease reads, no PTR answers).
     lan: Option<LanState>,
@@ -193,7 +218,8 @@ impl Router {
                 }
             }
         }
-        let mut blocked = DomainSet::load(&cfg.block_file);
+        let user_block = DomainSet::load(&cfg.block_file);
+        let mut blocked = user_block.clone();
         let mut ad_count = 0;
         if !cfg.ad_list_file.is_empty() {
             let ads = DomainSet::load(&cfg.ad_list_file);
@@ -201,7 +227,8 @@ impl Router {
             blocked.full.extend(ads.full);
             blocked.suffix.extend(ads.suffix);
         }
-        let mut local_domains = DomainSet::load(&cfg.local_domains_file);
+        let user_local = DomainSet::load(&cfg.local_domains_file);
+        let mut local_domains = user_local.clone();
         if !cfg.china_list_file.is_empty() {
             let china = DomainSet::load(&cfg.china_list_file);
             local_domains.full.extend(china.full);
@@ -248,6 +275,8 @@ impl Router {
             hosts_ttl: cfg.hosts_ttl,
             reject_type65: cfg.reject_type65,
             special,
+            user_block,
+            user_local,
             lan,
         }
     }
@@ -324,6 +353,81 @@ impl Router {
     }
 }
 
+/// Why `decide` routed a name the way it did (diagnostics only; the query
+/// path never builds this). `action` mirrors `Decision`: hosts | redirect |
+/// lan | blocked | forward. `group` is the target group for `forward`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Explain {
+    pub action: &'static str,
+    pub group: &'static str,
+    /// which rule source matched: type65 | hosts_file | redirect_file |
+    /// lan_leases | lan_ptr | block_file | ad_list | special_tld |
+    /// private_ptr | local_domains_file | china_list | default
+    pub source: &'static str,
+    /// full (exact `full:` entry) | exact (hosts/redirect key) | suffix
+    /// (domain or parent) | none
+    pub match_kind: &'static str,
+    /// the matching entry, e.g. "baidu.com" for "www.baidu.com"
+    pub rule: String,
+    /// action detail: redirect target, hosts/LAN addresses, PTR name
+    pub target: String,
+}
+
+impl Router {
+    /// Explain the routing decision for `qname`. Must stay in the same order
+    /// as `decide` (a test cross-checks the two).
+    pub fn explain(&self, qname: &str, qtype: u16) -> Explain {
+        let mk = |action, group, source, match_kind, rule: &str, target: String| Explain {
+            action,
+            group,
+            source,
+            match_kind,
+            rule: rule.to_string(),
+            target,
+        };
+        if self.reject_type65 && qtype == crate::dns::TYPE_HTTPS {
+            return mk("blocked", "", "type65", "none", "", String::new());
+        }
+        if qtype == crate::dns::TYPE_A || qtype == crate::dns::TYPE_AAAA {
+            if let Some(ips) = self.hosts.get(qname) {
+                let t = ips.iter().map(|i| i.to_string()).collect::<Vec<_>>().join(" ");
+                return mk("hosts", "", "hosts_file", "exact", qname, t);
+            }
+        }
+        if let Some(to) = self.redirects.get(qname) {
+            return mk("redirect", "", "redirect_file", "exact", qname, to.clone());
+        }
+        if self.lan.is_some() {
+            if let Some(Decision::Lan(ans, _)) = self.lan_decide(qname, qtype) {
+                return match ans {
+                    LanAnswer::Ptr(n) => mk("lan", "", "lan_ptr", "exact", qname, n),
+                    LanAnswer::Addrs(ips) => {
+                        let t = ips.iter().map(|i| i.to_string()).collect::<Vec<_>>().join(" ");
+                        mk("lan", "", "lan_leases", "exact", qname, t)
+                    }
+                };
+            }
+        }
+        if let Some((kind, rule)) = self.blocked.find(qname) {
+            return match self.user_block.find(qname) {
+                Some((k, r)) => mk("blocked", "", "block_file", k, r, String::new()),
+                None => mk("blocked", "", "ad_list", kind, rule, String::new()),
+            };
+        }
+        if let Some((kind, rule)) = self.special.find(qname) {
+            let src = if rule.ends_with(".arpa") { "private_ptr" } else { "special_tld" };
+            return mk("blocked", "", src, kind, rule, String::new());
+        }
+        if let Some((kind, rule)) = self.local_domains.find(qname) {
+            return match self.user_local.find(qname) {
+                Some((k, r)) => mk("forward", "local", "local_domains_file", k, r, String::new()),
+                None => mk("forward", "local", "china_list", kind, rule, String::new()),
+            };
+        }
+        mk("forward", "main", "default", "none", "", String::new())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -338,5 +442,59 @@ mod tests {
         assert!(!s.matches("notexample.com"));
         assert!(s.matches("only.example.org"));
         assert!(!s.matches("sub.only.example.org"));
+        assert_eq!(s.find("a.b.example.com"), Some(("suffix", "example.com")));
+        assert_eq!(s.find("only.example.org"), Some(("full", "only.example.org")));
+        assert_eq!(s.find("sub.only.example.org"), None);
+    }
+
+    #[test]
+    fn explain_agrees_with_decide_and_names_the_source() {
+        let dir = std::env::temp_dir().join(format!("pdns-explain-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let w = |n: &str, t: &str| {
+            let p = dir.join(n);
+            std::fs::write(&p, t).unwrap();
+            p.to_string_lossy().to_string()
+        };
+        let cfg: RoutingCfg = toml::from_str(&format!(
+            "hosts_file = {:?}\nblock_file = {:?}\nad_list_file = {:?}\n\
+             local_domains_file = {:?}\nchina_list_file = {:?}\nredirect_file = {:?}\n",
+            w("hosts", "router.home.example 10.0.0.1\n"),
+            w("block", "full:bad.example\n"),
+            w("ads", "ads.example\n"),
+            w("local", "corp.example\n"),
+            w("china", "baidu.com\n"),
+            w("redir", "old.example new.example\n"),
+        ))
+        .unwrap();
+        let r = Router::load_with_lan(&cfg, &LanCfg::default());
+        let a = crate::dns::TYPE_A;
+        let cases = [
+            ("router.home.example", "hosts", "hosts_file", "exact", "router.home.example"),
+            ("old.example", "redirect", "redirect_file", "exact", "old.example"),
+            ("bad.example", "blocked", "block_file", "full", "bad.example"),
+            ("x.ads.example", "blocked", "ad_list", "suffix", "ads.example"),
+            ("printer.local", "blocked", "special_tld", "suffix", "local"),
+            ("1.1.168.192.in-addr.arpa", "blocked", "private_ptr", "suffix", "168.192.in-addr.arpa"),
+            ("git.corp.example", "forward", "local_domains_file", "suffix", "corp.example"),
+            ("www.baidu.com", "forward", "china_list", "suffix", "baidu.com"),
+            ("www.google.com", "forward", "default", "none", ""),
+        ];
+        for (name, action, source, kind, rule) in cases {
+            let e = r.explain(name, a);
+            assert_eq!((e.action, e.source, e.match_kind, e.rule.as_str()), (action, source, kind, rule), "{}", name);
+            let d = match r.decide(name, a) {
+                Decision::Hosts(_) => "hosts",
+                Decision::Lan(..) => "lan",
+                Decision::Block => "blocked",
+                Decision::Redirect(_) => "redirect",
+                Decision::Forward(g) => {
+                    assert_eq!(g, e.group, "{}", name);
+                    "forward"
+                }
+            };
+            assert_eq!(d, e.action, "{}", name);
+        }
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

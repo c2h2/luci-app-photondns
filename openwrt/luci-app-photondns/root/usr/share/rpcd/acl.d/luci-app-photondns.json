@@ -24,6 +24,7 @@
 					"query_log",
 					"cache_search",
 					"resolve",
+					"compare",
 					"service_state"
 				]
 			},

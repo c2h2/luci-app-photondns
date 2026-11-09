@@ -22,10 +22,11 @@ function api_port() {
 	return c.get('photondns', 'main', 'api_port') || '8053';
 }
 
-function api_get(path) {
+function api_get(path, secs) {
 	let port = api_port();
 	let url = `http://127.0.0.1:${port}${path}`;
-	let res = exec_sys(`curl -s --max-time 3 '${url}' || uclient-fetch -q -O - -T 3 '${url}'`);
+	let t = secs || 3;
+	let res = exec_sys(`curl -s --max-time ${t} '${url}' || uclient-fetch -q -O - -T ${t} '${url}'`);
 	return res;
 }
 
@@ -222,6 +223,30 @@ const methods = {
 					return { running: false, error: 'empty name' };
 				}
 				let res = api_get(`/resolve?name=${name}&type=${qtype}`);
+				if (res.code === 0 && length(res.stdout) > 0) {
+					return { running: true, raw: res.stdout };
+				}
+				return { running: false, raw: "" };
+			} catch (e) {
+				return { running: false, error: String(e) };
+			}
+		}
+	},
+
+	// Ask every upstream of the group `name` routes to (speed comparison).
+	// Upstreams are capped at 4 s by the daemon, so allow a little longer.
+	compare: {
+		args: { name: '', type: 'A' },
+		call: function(req) {
+			try {
+				let name = (req.args ? req.args.name : '') || '';
+				let qtype = (req.args ? req.args.type : 'A') || 'A';
+				name = replace(name, /[^A-Za-z0-9._-]/g, '');
+				qtype = replace(qtype, /[^A-Za-z0-9]/g, '');
+				if (length(name) == 0) {
+					return { running: false, error: 'empty name' };
+				}
+				let res = api_get(`/compare?name=${name}&type=${qtype}`, 7);
 				if (res.code === 0 && length(res.stdout) > 0) {
 					return { running: true, raw: res.stdout };
 				}

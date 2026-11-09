@@ -956,3 +956,183 @@ msgstr "绕过标记（fwmark）"
 
 msgid "SO_MARK value set on upstream sockets of bypassing groups. Passwall / Passwall2 skip mark 255 (0xff)"
 msgstr "绕过代理的分组在上游套接字上设置的 SO_MARK 值。Passwall / Passwall2 会放行标记 255（0xff）"
+
+msgid "Reject HTTPS/SVCB (type 65) setting"
+msgstr "“拒绝 HTTPS/SVCB（type 65）”设置"
+
+msgid "Hosts rule file"
+msgstr "Hosts 规则文件"
+
+msgid "Redirect rule file"
+msgstr "重定向规则文件"
+
+msgid "LAN client name (DHCP lease / LAN hosts)"
+msgstr "局域网客户端名称（DHCP 租约 / 局域网主机）"
+
+msgid "LAN client reverse lookup"
+msgstr "局域网客户端反向解析"
+
+msgid "Block rule file"
+msgstr "拦截规则文件"
+
+msgid "Ad block list"
+msgstr "广告拦截列表"
+
+msgid "Special-use TLD protection (.local, .lan, ...)"
+msgstr "特殊顶级域保护（.local、.lan 等）"
+
+msgid "Private address PTR protection"
+msgstr "内网地址 PTR 保护"
+
+msgid "Local Domains rule file"
+msgstr "本地域名规则文件"
+
+msgid "China domain list (geosite:cn)"
+msgstr "国内域名列表（geosite:cn）"
+
+msgid "No rule matched (default group)"
+msgstr "未命中任何规则（默认分组）"
+
+msgid "Exact (full: entry)"
+msgstr "完全匹配（full: 条目）"
+
+msgid "Exact name"
+msgstr "完全匹配域名"
+
+msgid "Suffix (domain and all subdomains)"
+msgstr "后缀匹配（该域名及所有子域名）"
+
+msgid "%ds ago"
+msgstr "%d 秒前"
+
+msgid "%dm ago"
+msgstr "%d 分钟前"
+
+msgid "%dh ago"
+msgstr "%d 小时前"
+
+msgid "%s matched no routing rule, so it goes to the default group \"%s\"."
+msgstr "%s 未命中任何分流规则，因此走默认分组“%s”。"
+
+msgid "%s matched %s rule %s in %s, so it goes to group \"%s\"."
+msgstr "%s 以%s方式命中规则 %s（来源：%s），因此走分组“%s”。"
+
+msgid "exact"
+msgstr "完全匹配"
+
+msgid "suffix"
+msgstr "后缀匹配"
+
+msgid "Type 65 (HTTPS/SVCB) queries are rejected by the \"Reject type 65\" setting."
+msgstr "type 65（HTTPS/SVCB）查询被“拒绝 type 65”设置拒绝。"
+
+msgid "%s matched %s rule %s in %s, so it is answered NXDOMAIN."
+msgstr "%s 以%s方式命中规则 %s（来源：%s），因此返回 NXDOMAIN。"
+
+msgid "%s is in the hosts rule file and answers %s directly."
+msgstr "%s 在 Hosts 规则文件中，直接返回 %s。"
+
+msgid "%s is redirected to %s by the redirect rule file."
+msgstr "%s 被重定向规则文件重定向到 %s。"
+
+msgid "%s is a known LAN client and answers %s locally."
+msgstr "%s 是已知的局域网客户端，本地直接返回 %s。"
+
+msgid "Answered by"
+msgstr "应答上游"
+
+msgid "(won the race just now)"
+msgstr "（刚刚竞速胜出）"
+
+msgid "Redirect target"
+msgstr "重定向目标"
+
+msgid "(cached; filled %s, %s ms)"
+msgstr "（来自缓存；%s 写入，耗时 %s ms）"
+
+msgid "Why this route"
+msgstr "分流原因"
+
+msgid "Decision"
+msgstr "决策"
+
+msgid "forward to group"
+msgstr "转发到分组"
+
+msgid "Rule source"
+msgstr "规则来源"
+
+msgid "Match type"
+msgstr "匹配方式"
+
+msgid "Matched rule"
+msgstr "命中规则"
+
+msgid "Rule target"
+msgstr "规则目标"
+
+msgid "Note"
+msgstr "说明"
+
+msgid "No \"local\" group is configured, so the default group is used."
+msgstr "未配置“local”分组，因此使用默认分组。"
+
+msgid "Group upstreams"
+msgstr "分组上游"
+
+msgid "(backup)"
+msgstr "（备用）"
+
+msgid "IPv6 (AAAA) mode"
+msgstr "IPv6（AAAA）模式"
+
+msgid "%s - clients may get an empty AAAA answer"
+msgstr "%s — 客户端可能收到空的 AAAA 应答"
+
+msgid "Upstream comparison"
+msgstr "上游对比"
+
+msgid "Run again"
+msgstr "重新测试"
+
+msgid "This name never reaches an upstream; showing how the default group would answer it."
+msgstr "该域名不会发往上游；下面显示默认分组会如何应答。"
+
+msgid "Asks every upstream of the group at the same time, bypassing the cache, so you can compare speed and answers. Does not affect failover health."
+msgstr "同时向该分组的所有上游发起查询（绕过缓存），对比速度和应答结果。不影响故障切换的健康统计。"
+
+msgid "Querying all upstreams..."
+msgstr "正在查询所有上游…"
+
+msgid "Avg (EWMA)"
+msgstr "平均（EWMA）"
+
+msgid "Health"
+msgstr "健康状态"
+
+msgid "answered"
+msgstr "已应答"
+
+msgid "fastest"
+msgstr "最快"
+
+msgid "failed"
+msgstr "失败"
+
+msgid "healthy"
+msgstr "健康"
+
+msgid "down"
+msgstr "不可用"
+
+msgid "Group \"%s\" - %d upstreams"
+msgstr "分组“%s” — %d 个上游"
+
+msgid "Type a domain to search what photondns currently has cached. The 15 closest cached records appear as you type (↓/↑ to move, Enter to pick); selecting one runs a full resolve (cache-first) and shows the answers, route, TTL and timing, which routing rule sent it there (suffix / exact match, China list, ad list, ...), which upstream answered and a live speed comparison of every upstream in the group. Pressing Enter without a selection resolves exactly what you typed."
+msgstr "输入域名，搜索 photondns 当前缓存的内容。输入时显示最接近的 15 条缓存记录（↓/↑ 移动，回车选择）；选中后执行完整解析（优先缓存），显示应答、路由、TTL 和耗时，以及命中的分流规则（后缀 / 完全匹配、国内列表、广告列表等）、由哪个上游应答，并实时对比该分组所有上游的速度。未选中时按回车则解析所输入的内容。"
+
+msgid "Type a domain to search what photondns currently has cached. The 15 closest cached records appear as you type; selecting one runs a full resolve and shows the answers, route, TTL and timing, which routing rule sent it there, which upstream answered and a live speed comparison of every upstream in the group."
+msgstr "输入域名，搜索 photondns 当前缓存的内容。输入时显示最接近的 15 条缓存记录；选中后执行完整解析，显示应答、路由、TTL 和耗时，以及命中的分流规则、由哪个上游应答，并实时对比该分组所有上游的速度。"
+
+msgid "cached"
+msgstr "缓存"
