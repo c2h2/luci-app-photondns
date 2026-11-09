@@ -208,12 +208,9 @@ function fillGeo(root) {
 		el.textContent = '…';
 		geoLookup(ip).then(g => {
 			if (!g) { el.textContent = ''; return; }
-			if (el.getAttribute('data-short')) {
-				el.textContent = flagEmoji(g.cc);
-				el.title = geoText(g);
-			} else {
-				el.textContent = geoText(g);
-			}
+			el.textContent = el.getAttribute('data-short')
+				? flagEmoji(g.cc) : flagEmoji(g.cc) + ' ' + (g.country || g.cc);
+			el.title = geoText(g) + ' (' + g.source + ')';
 		});
 	});
 }
@@ -317,14 +314,6 @@ return view.extend({
 				b.appendChild(kvTable(er));
 			}
 
-			/* ---- IP location map ---- */
-			const pubIps = (d.answers || []).filter(a => !privateKind(a));
-			if (pubIps.length) {
-				b.appendChild(E('h3', { style: 'margin-top:18px' }, _('IP location')));
-				const mapBox = E('div', { id: 'checker_map' }, E('div', { style: 'opacity:.6' }, _('Locating %s...').format(pubIps[0])));
-				b.appendChild(mapBox);
-				this.runMap(pubIps);
-			}
 			fillGeo(b);
 
 			/* ---- hosting ---- */
@@ -350,47 +339,6 @@ return view.extend({
 					: _('Asks every upstream of the group at the same time, bypassing the cache, so you can compare speed and answers. Does not affect failover health.')));
 			b.appendChild(cmpBox);
 			this.runCompare(d.name || name, type, answeredBy);
-		});
-	},
-
-	// Map of the first answer IP's location (OpenStreetMap embed) plus the
-	// distinct countries of all answers.
-	runMap(ips) {
-		Promise.all(ips.slice(0, 8).map(geoLookup)).then(gs => {
-			const box = document.getElementById('checker_map');
-			if (!box) return;
-			box.innerHTML = '';
-			const found = gs.map((g, i) => [ips[i], g]).filter(x => x[1] && isFinite(x[1].lat) && isFinite(x[1].lon));
-			if (!found.length) {
-				box.appendChild(E('div', { style: 'opacity:.6' },
-					_('Could not look up the location (the browser could not reach ipwho.is / ipinfo.io).')));
-				return;
-			}
-			const seen = {};
-			const countries = found.filter(x => {
-				const k = x[1].cc; if (seen[k]) return false; seen[k] = 1; return true;
-			}).map(x => E('span', {
-				style: 'display:inline-block; margin:0 10px 6px 0; padding:2px 10px; border-radius:12px; ' +
-					'background:rgba(13,110,253,.1); font-size:105%'
-			}, flagEmoji(x[1].cc) + ' ' + (x[1].country || x[1].cc)));
-			const g = found[0][1];
-			const lat = +g.lat, lon = +g.lon;
-			const bbox = [lon - 4, lat - 2.5, lon + 4, lat + 2.5].map(v => v.toFixed(4)).join(',');
-			const src = 'https://www.openstreetmap.org/export/embed.html?bbox=' + bbox +
-				'&layer=mapnik&marker=' + lat.toFixed(5) + ',' + lon.toFixed(5);
-			box.appendChild(E('div', {}, countries));
-			box.appendChild(E('div', { style: 'margin-bottom:6px' }, [
-				mono(found[0][0]), ' ', geoText(g)]));
-			box.appendChild(E('iframe', {
-				src: src, loading: 'lazy', referrerpolicy: 'no-referrer',
-				style: 'width:100%; max-width:760px; height:300px; border:1px solid #ccc; border-radius:6px'
-			}));
-			box.appendChild(E('div', { style: 'font-size:85%; opacity:.6; margin-top:4px' }, [
-				_('Location by %s, looked up by your browser; map © OpenStreetMap contributors.').format(g.source) + ' ' +
-				_('GeoIP is approximate - anycast/CDN addresses show where the operator registered them.'), ' ',
-				E('a', { href: 'https://www.openstreetmap.org/?mlat=' + lat.toFixed(5) + '&mlon=' + lon.toFixed(5) + '#map=6/' + lat.toFixed(4) + '/' + lon.toFixed(4),
-					target: '_blank', rel: 'noopener noreferrer' }, _('Open larger map'))
-			]));
 		});
 	},
 
@@ -612,7 +560,7 @@ return view.extend({
 				  'routing rule sent it there (suffix / exact match, China list, ad list, ...), ' +
 				  'which upstream answered, who hosts the domain (DNS provider, nameservers, CDN) and a ' +
 				  'live speed comparison of every upstream in the group. Answer IPs get a country flag ' +
-				  'and map (looked up by your browser at ipwho.is). URLs are reduced to their host name. ' +
+				  '(looked up by your browser at ipwho.is). URLs are reduced to their host name. ' +
 				  'Pressing Enter without a selection resolves exactly what you typed.')),
 			E('div', { id: 'checker_wrap', style: 'position:relative; margin:10px 0' }, [
 				input,

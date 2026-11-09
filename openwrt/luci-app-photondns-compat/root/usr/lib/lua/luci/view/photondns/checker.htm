@@ -2,7 +2,7 @@
 
 <h2><%:Cache Lookup%></h2>
 <div class="cbi-map-descr">
-	<%:Type a domain to search what photondns currently has cached. The 15 closest cached records appear as you type; selecting one runs a full resolve and shows the answers, route, TTL and timing, which routing rule sent it there, which upstream answered, who hosts the domain (DNS provider, nameservers, CDN) and a live speed comparison of every upstream in the group. Answer IPs get a country flag and map (looked up by your browser at ipwho.is). URLs are reduced to their host name.%>
+	<%:Type a domain to search what photondns currently has cached. The 15 closest cached records appear as you type; selecting one runs a full resolve and shows the answers, route, TTL and timing, which routing rule sent it there, which upstream answered, who hosts the domain (DNS provider, nameservers, CDN) and a live speed comparison of every upstream in the group. Answer IPs get a country flag (looked up by your browser at ipwho.is). URLs are reduced to their host name.%>
 </div>
 
 <div id="checker_wrap" style="position:relative; margin:10px 0">
@@ -155,34 +155,12 @@
 			el.textContent = '…';
 			geoLookup(ip, function(g) {
 				if (!g) { el.textContent = ''; return; }
-				if (el.getAttribute('data-short')) { el.textContent = flagEmoji(g.cc) || g.cc; el.title = geoText(g); }
-				else el.textContent = geoText(g);
+				el.textContent = el.getAttribute('data-short')
+					? (flagEmoji(g.cc) || g.cc) : flagEmoji(g.cc) + ' ' + (g.country || g.cc);
+				el.title = geoText(g) + ' (' + g.source + ')';
 			});
 		})(els[i]);
 	}
-	function runMap(ips) {
-		var box = document.getElementById('checker_map');
-		if (!box || !ips.length) return;
-		geoLookup(ips[0], function(g) {
-			var b = document.getElementById('checker_map');
-			if (!b) return;
-			if (!g || !isFinite(g.lat) || !isFinite(g.lon)) {
-				b.innerHTML = '<div style="opacity:.6"><%:Could not look up the location (the browser could not reach ipwho.is / ipinfo.io).%></div>';
-				return;
-			}
-			var lat = +g.lat, lon = +g.lon;
-			var bbox = [lon - 4, lat - 2.5, lon + 4, lat + 2.5].map(function(v) { return v.toFixed(4); }).join(',');
-			b.innerHTML = '<div style="margin-bottom:6px">' + mono(ips[0]) + ' ' + esc(geoText(g)) + '</div>' +
-				'<iframe loading="lazy" referrerpolicy="no-referrer" style="width:100%; max-width:760px; height:300px; border:1px solid #ccc; border-radius:6px" src="' +
-				'https://www.openstreetmap.org/export/embed.html?bbox=' + bbox + '&amp;layer=mapnik&amp;marker=' +
-				lat.toFixed(5) + ',' + lon.toFixed(5) + '"></iframe>' +
-				'<div style="font-size:85%; opacity:.6; margin-top:4px">' + esc(g.source) +
-				' · © OpenStreetMap contributors · <%:GeoIP is approximate - anycast/CDN addresses show where the operator registered them.%> ' +
-				'<a target="_blank" rel="noopener noreferrer" href="https://www.openstreetmap.org/?mlat=' + lat.toFixed(5) +
-				'&amp;mlon=' + lon.toFixed(5) + '#map=6/' + lat.toFixed(4) + '/' + lon.toFixed(4) + '"><%:Open larger map%></a></div>';
-		});
-	}
-
 	function mono(t) {
 		return '<span style="font-family:monospace; word-break:break-all">' + esc(t) + '</span>';
 	}
@@ -382,11 +360,6 @@
 			html += '</table>';
 			if (d.explain) html += explainHtml(d.explain);
 			var qn = d.name || name, qt = type || 'A';
-			var pubIps = [];
-			for (var pi = 0; d.answers && pi < d.answers.length; pi++)
-				if (!privateKind(d.answers[pi])) pubIps.push(d.answers[pi]);
-			if (pubIps.length)
-				html += '<h3 style="margin-top:18px"><%:IP location%></h3><div id="checker_map"><div style="opacity:.6">…</div></div>';
 			html += '<h3 style="margin-top:18px"><%:Hosting%></h3>' +
 				'<div class="cbi-section-descr" style="margin-bottom:6px"><%:The authoritative nameservers hold the real records; the resolvers above just ask them. A CNAME chain or the answer IPs reveal the CDN serving the site.%></div>' +
 				'<div id="checker_zone"><div style="opacity:.6"><%:Looking up nameservers...%></div></div>';
@@ -400,7 +373,6 @@
 			b.innerHTML = html;
 			document.getElementById('checker_rerun').onclick = function() { runCompare(qn, qt, answeredBy); };
 			fillGeo(b);
-			runMap(pubIps);
 			runZone(qn);
 			runCompare(qn, qt, answeredBy);
 		});

@@ -51,9 +51,9 @@ cargo build --release
 
 ## 近期更新（2026 年 11 月）
 
-- **缓存查找显示 IP 归属地** — 每个应答 IP 显示国旗 emoji、国家 / 城市和 ASN，
-  并用 OpenStreetMap 地图显示第一个地址的位置（由浏览器向 ipwho.is 查询，
-  ipinfo.io 兜底；内网与 Fake-IP 198.18.0.0/15 地址只做标注、不外发）。
+- **缓存查找显示 IP 所属国家** — 每个应答 IP 显示国旗 emoji 和国家（悬停显示
+  城市 / ASN），由浏览器向 ipwho.is 查询，ipinfo.io 兜底；内网与 Fake-IP
+  198.18.0.0/15 地址只做标注、不外发。
   粘贴网址（`https://www.lilly.com/`）会自动提取主机名。
 - **域名托管信息** — 缓存查找页面（及 `/zone?name=…`）显示域名所属区域、
   权威域名服务器及其服务商（Cloudflare、Route 53、阿里云解析、DNSPod、NS1 等，
