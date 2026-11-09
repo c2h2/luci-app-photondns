@@ -257,6 +257,27 @@ const methods = {
 		}
 	},
 
+	// Who hosts a name: CNAME chain / CDN, DNS zone + authoritative NS.
+	zone: {
+		args: { name: '' },
+		call: function(req) {
+			try {
+				let name = (req.args ? req.args.name : '') || '';
+				name = replace(name, /[^A-Za-z0-9._-]/g, '');
+				if (length(name) == 0) {
+					return { running: false, error: 'empty name' };
+				}
+				let res = api_get(`/zone?name=${name}`, 12);
+				if (res.code === 0 && length(res.stdout) > 0) {
+					return { running: true, raw: res.stdout };
+				}
+				return { running: false, raw: "" };
+			} catch (e) {
+				return { running: false, error: String(e) };
+			}
+		}
+	},
+
 	clean_log: {
 		call: function() {
 			try {

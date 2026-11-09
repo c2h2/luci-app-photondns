@@ -1115,11 +1115,7 @@ msgstr ""
 msgid "Group \"%s\" - %d upstreams"
 msgstr ""
 
-msgid "Type a domain to search what photondns currently has cached. The 15 closest cached records appear as you type (↓/↑ to move, Enter to pick); selecting one runs a full resolve (cache-first) and shows the answers, route, TTL and timing, which routing rule sent it there (suffix / exact match, China list, ad list, ...), which upstream answered and a live speed comparison of every upstream in the group. Pressing Enter without a selection resolves exactly what you typed."
-msgstr ""
 
-msgid "Type a domain to search what photondns currently has cached. The 15 closest cached records appear as you type; selecting one runs a full resolve and shows the answers, route, TTL and timing, which routing rule sent it there, which upstream answered and a live speed comparison of every upstream in the group."
-msgstr ""
 
 msgid "cached"
 msgstr ""
@@ -1131,4 +1127,49 @@ msgid "backup - only used when all primaries time out"
 msgstr ""
 
 msgid "(backup - only used when all primaries time out)"
+msgstr ""
+
+msgid "Type a domain to search what photondns currently has cached. The 15 closest cached records appear as you type (↓/↑ to move, Enter to pick); selecting one runs a full resolve (cache-first) and shows the answers, route, TTL and timing, which routing rule sent it there (suffix / exact match, China list, ad list, ...), which upstream answered, who hosts the domain (DNS provider, nameservers, CDN) and a live speed comparison of every upstream in the group. Pressing Enter without a selection resolves exactly what you typed."
+msgstr ""
+
+msgid "Type a domain to search what photondns currently has cached. The 15 closest cached records appear as you type; selecting one runs a full resolve and shows the answers, route, TTL and timing, which routing rule sent it there, which upstream answered, who hosts the domain (DNS provider, nameservers, CDN) and a live speed comparison of every upstream in the group."
+msgstr ""
+
+msgid "Hosting"
+msgstr ""
+
+msgid "The authoritative nameservers hold the real records; the resolvers above just ask them. A CNAME chain or the answer IPs reveal the CDN serving the site."
+msgstr ""
+
+msgid "Looking up nameservers..."
+msgstr ""
+
+msgid "DNS hosted by"
+msgstr ""
+
+msgid "unknown provider"
+msgstr ""
+
+msgid "could not find the zone"
+msgstr ""
+
+msgid "Zone"
+msgstr ""
+
+msgid "Nameservers"
+msgstr ""
+
+msgid "Site served by"
+msgstr ""
+
+msgid "no CDN detected"
+msgstr ""
+
+msgid "CNAME chain"
+msgstr ""
+
+msgid "Detected from"
+msgstr ""
+
+msgid "answer IPs are in %s address ranges"
 msgstr ""

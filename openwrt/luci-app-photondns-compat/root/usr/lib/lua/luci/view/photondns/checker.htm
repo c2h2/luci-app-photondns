@@ -2,7 +2,7 @@
 
 <h2><%:Cache Lookup%></h2>
 <div class="cbi-map-descr">
-	<%:Type a domain to search what photondns currently has cached. The 15 closest cached records appear as you type; selecting one runs a full resolve and shows the answers, route, TTL and timing, which routing rule sent it there, which upstream answered and a live speed comparison of every upstream in the group.%>
+	<%:Type a domain to search what photondns currently has cached. The 15 closest cached records appear as you type; selecting one runs a full resolve and shows the answers, route, TTL and timing, which routing rule sent it there, which upstream answered, who hosts the domain (DNS provider, nameservers, CDN) and a live speed comparison of every upstream in the group.%>
 </div>
 
 <div id="checker_wrap" style="position:relative; margin:10px 0">
@@ -21,6 +21,7 @@
 	var searchUrl  = '<%=luci.dispatcher.build_url("admin/services/photondns/api/cachekeys")%>';
 	var resolveUrl = '<%=luci.dispatcher.build_url("admin/services/photondns/api/resolve")%>';
 	var compareUrl = '<%=luci.dispatcher.build_url("admin/services/photondns/api/compare")%>';
+	var zoneUrl    = '<%=luci.dispatcher.build_url("admin/services/photondns/api/zone")%>';
 
 	var SOURCES = {
 		type65: '<%:Reject HTTPS/SVCB (type 65) setting%>',
@@ -104,6 +105,44 @@
 			if (x.aaaa_mode) rows.push(['<%:IPv6 (AAAA) mode%>', esc(x.aaaa_mode)]);
 		}
 		return '<h3 style="margin-top:18px"><%:Why this route%></h3>' + tableOf(rows);
+	}
+
+	function pillOf(t, color) {
+		return '<span style="padding:1px 8px; border-radius:8px; color:#fff; font-size:90%; background:' +
+			color + '">' + esc(t) + '</span>';
+	}
+
+	// Hosting section: DNS provider, zone + nameservers, CNAME chain / CDN
+	function runZone(name) {
+		XHR.get(zoneUrl, { name: name }, function(x, res) {
+			var bx = document.getElementById('checker_zone');
+			if (!bx) return;
+			var z = parseRaw(res);
+			if (!z || z.error) {
+				bx.innerHTML = '<div class="alert-message warning">' +
+					esc((z && z.error) || '<%:No response from photondns (is it running?).%>') + '</div>';
+				return;
+			}
+			var rows = [], i, h;
+			var hasNs = z.nameservers && z.nameservers.length;
+			rows.push(['<%:DNS hosted by%>', z.dns_provider ? pillOf(z.dns_provider, '#7952b3') :
+				'<span style="opacity:.6">' + (hasNs ? '<%:unknown provider%>' : '<%:could not find the zone%>') + '</span>']);
+			if (z.zone) rows.push(['<%:Zone%>', mono(z.zone)]);
+			if (hasNs) {
+				h = '';
+				for (i = 0; i < z.nameservers.length; i++) h += '<div>' + mono(z.nameservers[i]) + '</div>';
+				rows.push(['<%:Nameservers%>', h]);
+			}
+			var site = z.cdn || z.ip_network;
+			rows.push(['<%:Site served by%>', site ? pillOf(site, '#e67e22') :
+				'<span style="opacity:.6"><%:no CDN detected%></span>']);
+			if (z.cname_chain && z.cname_chain.length) {
+				h = mono(z.name);
+				for (i = 0; i < z.cname_chain.length; i++) h += '<div>&#8594; ' + mono(z.cname_chain[i]) + '</div>';
+				rows.push(['<%:CNAME chain%>', h]);
+			}
+			bx.innerHTML = tableOf(rows);
+		});
 	}
 
 	function runCompare(name, type, answeredBy) {
@@ -215,6 +254,9 @@
 			html += '</table>';
 			if (d.explain) html += explainHtml(d.explain);
 			var qn = d.name || name, qt = type || 'A';
+			html += '<h3 style="margin-top:18px"><%:Hosting%></h3>' +
+				'<div class="cbi-section-descr" style="margin-bottom:6px"><%:The authoritative nameservers hold the real records; the resolvers above just ask them. A CNAME chain or the answer IPs reveal the CDN serving the site.%></div>' +
+				'<div id="checker_zone"><div style="opacity:.6"><%:Looking up nameservers...%></div></div>';
 			html += '<h3 style="margin-top:18px"><%:Upstream comparison%> ' +
 				'<button class="cbi-button cbi-button-action" id="checker_rerun" style="margin-left:8px"><%:Run again%></button></h3>' +
 				'<div class="cbi-section-descr" style="margin-bottom:6px">' +
@@ -224,6 +266,7 @@
 				'</div><div id="checker_compare"></div>';
 			b.innerHTML = html;
 			document.getElementById('checker_rerun').onclick = function() { runCompare(qn, qt, answeredBy); };
+			runZone(qn);
 			runCompare(qn, qt, answeredBy);
 		});
 	}

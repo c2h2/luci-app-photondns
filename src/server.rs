@@ -1019,6 +1019,91 @@ fn clear_refreshing(ctx: &Arc<Ctx>, key: &cache::CacheKey) {
     }
 }
 
+/// Cache-first raw lookup for diagnostics: returns the response and its
+/// question end. Misses go through the normal routed upstream path (and
+/// fill the cache, like any real query would).
+async fn lookup_raw(ctx: &Arc<Ctx>, name: &str, qtype: u16) -> Option<(Vec<u8>, usize)> {
+    let query = dns::build_query(name, qtype, dns::CLASS_IN)?;
+    let meta = dns::parse_query(&query)?;
+    let key = cache::make_key(&meta.qname, meta.qtype, meta.qclass);
+    if let Some(cache) = &ctx.cache {
+        let now = Instant::now();
+        if let Some((entry, _)) = cache.get(&key, now) {
+            let r = entry.make_response(&query, &meta, now, ctx.cfg.cache.stale_client_ttl);
+            return Some((r, meta.question_end));
+        }
+    }
+    let (resp, _, _) = resolve_upstream(ctx, &query, &meta, &key).await.ok()?;
+    Some((resp, meta.question_end))
+}
+
+/// Who hosts a name: its CNAME chain (and the CDN that reveals), the DNS
+/// zone it lives in and that zone's authoritative nameservers / provider.
+pub struct ZoneInfo {
+    pub cname_chain: Vec<String>,
+    /// network of the A answers (Cloudflare's published ranges)
+    pub ip_network: Option<&'static str>,
+    pub cdn: Option<&'static str>,
+    pub zone: String,
+    pub nameservers: Vec<String>,
+    pub dns_provider: Option<String>,
+}
+
+pub async fn zone_info(ctx: &Arc<Ctx>, name: &str) -> ZoneInfo {
+    let name = name.trim_end_matches('.').to_ascii_lowercase();
+    // CNAME chain from the A answer (CNAMEs come first, in chain order)
+    let (cname_chain, ip_network) = match lookup_raw(ctx, &name, dns::TYPE_A).await {
+        Some((r, qend)) => (
+            dns::name_records(&r, qend)
+                .into_iter()
+                .filter(|rr| rr.section == 0 && rr.rtype == dns::TYPE_CNAME)
+                .map(|rr| rr.target)
+                .collect(),
+            dns::extract_ips(&r, qend)
+                .iter()
+                .find_map(crate::hosting::ip_network),
+        ),
+        None => (Vec::new(), None),
+    };
+    // zone apex = the longest of name / its parents that owns NS records.
+    // Ask them all at once (each is one cached lookup afterwards). A CNAME'd
+    // name answers with the CNAME instead, so it never matches itself.
+    let labels: Vec<&str> = name.split('.').collect();
+    let candidates: Vec<String> = (0..labels.len().saturating_sub(1))
+        .map(|i| labels[i..].join("."))
+        .collect();
+    let answers = futures::future::join_all(
+        candidates.iter().map(|c| lookup_raw(ctx, c, dns::TYPE_NS)),
+    )
+    .await;
+    let mut zone = String::new();
+    let mut nameservers = Vec::new();
+    for (cand, ans) in candidates.iter().zip(answers) {
+        let Some((r, qend)) = ans else { continue };
+        let ns: Vec<String> = dns::name_records(&r, qend)
+            .into_iter()
+            .filter(|rr| rr.section == 0 && rr.rtype == dns::TYPE_NS && &rr.owner == cand)
+            .map(|rr| rr.target)
+            .collect();
+        if !ns.is_empty() {
+            zone = cand.clone();
+            nameservers = ns;
+            nameservers.sort();
+            break; // candidates run longest first
+        }
+    }
+    let dns_provider = crate::hosting::dns_provider(&zone, &nameservers);
+    let cdn = crate::hosting::cdn_provider(&cname_chain);
+    ZoneInfo {
+        cname_chain,
+        ip_network,
+        cdn,
+        zone,
+        nameservers,
+        dns_provider,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::parse_prewarm_list;

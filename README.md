@@ -59,6 +59,12 @@ public resolver.
 
 ## Recent changes (November 2026)
 
+- **Who hosts a domain** — the Cache Lookup page (and `/zone?name=…`) finds
+  the DNS zone, its authoritative nameservers and the provider behind them
+  (Cloudflare, Route 53, Alibaba Cloud DNS, DNSPod, NS1, ...; multi-provider
+  zones list each), plus the CNAME chain and the CDN it reveals (CloudFront,
+  Akamai, Fastly, Alibaba / Tencent / Baidu CDN, ...). Cloudflare-proxied
+  sites without a CNAME are recognised by Cloudflare's published IP ranges.
 - **Backups only on real timeouts** — backup upstreams (e.g. a China DNS
   behind the overseas group) no longer race healthy primaries and are never
   asked when a primary answers SERVFAIL/REFUSED, so overseas names are not

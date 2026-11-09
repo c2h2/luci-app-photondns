@@ -51,6 +51,11 @@ cargo build --release
 
 ## 近期更新（2026 年 11 月）
 
+- **域名托管信息** — 缓存查找页面（及 `/zone?name=…`）显示域名所属区域、
+  权威域名服务器及其服务商（Cloudflare、Route 53、阿里云解析、DNSPod、NS1 等，
+  多服务商会全部列出），以及 CNAME 链和由此识别的 CDN（CloudFront、Akamai、
+  Fastly、阿里云 / 腾讯云 / 百度 CDN 等）。没有 CNAME 的 Cloudflare 代理站点
+  通过 Cloudflare 公布的 IP 段识别。
 - **备用上游仅在真正超时时使用** — 备用上游（如挂在国外分组后的国内 DNS）
   不再与健康的主上游竞速；主上游返回 SERVFAIL/REFUSED 时也不会询问备用，
   国外域名不会泄露给它；仅当所有主上游不可用或超时时才接管。

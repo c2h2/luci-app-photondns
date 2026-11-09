@@ -19,6 +19,14 @@ const callCompare = rpc.declare({
 	expect: { '': {} }
 });
 
+// Who hosts a name: CNAME chain / CDN, DNS zone + authoritative nameservers.
+const callZone = rpc.declare({
+	object: 'luci.photondns',
+	method: 'zone',
+	params: ['name'],
+	expect: { '': {} }
+});
+
 // Full resolve (cache-first, may hit upstream) for a selected name.
 const callResolve = rpc.declare({
 	object: 'luci.photondns',
@@ -195,6 +203,14 @@ return view.extend({
 				b.appendChild(kvTable(er));
 			}
 
+			/* ---- hosting ---- */
+			b.appendChild(E('h3', { style: 'margin-top:18px' }, _('Hosting')));
+			b.appendChild(E('div', { class: 'cbi-section-descr', style: 'margin-bottom:6px' },
+				_('The authoritative nameservers hold the real records; the resolvers above just ask them. A CNAME chain or the answer IPs reveal the CDN serving the site.')));
+			const hostBox = E('div', { id: 'checker_zone' }, E('div', { style: 'opacity:.6' }, _('Looking up nameservers...')));
+			b.appendChild(hostBox);
+			this.runZone(d.name || name);
+
 			/* ---- upstream comparison ---- */
 			const cmpBox = E('div', { id: 'checker_compare' });
 			b.appendChild(E('h3', { style: 'margin-top:18px' }, [
@@ -210,6 +226,39 @@ return view.extend({
 					: _('Asks every upstream of the group at the same time, bypassing the cache, so you can compare speed and answers. Does not affect failover health.')));
 			b.appendChild(cmpBox);
 			this.runCompare(d.name || name, type, answeredBy);
+		});
+	},
+
+	// Fill the Hosting section: DNS provider, zone + NS, CNAME chain / CDN.
+	runZone(name) {
+		callZone(name).then(res => {
+			const z = parseRaw(res);
+			const bx = document.getElementById('checker_zone');
+			if (!bx) return;
+			bx.innerHTML = '';
+			if (!z || z.error) {
+				bx.appendChild(E('div', { class: 'alert-message warning' },
+					(z && z.error) || _('No response from photondns (is it running?).')));
+				return;
+			}
+			const pill = (t, c) => E('span', {
+				style: 'padding:1px 8px; border-radius:8px; color:#fff; font-size:90%; background:' + c }, t);
+			const rows = [];
+			rows.push([_('DNS hosted by'), z.dns_provider ? pill(z.dns_provider, '#7952b3')
+				: E('span', { style: 'opacity:.6' }, z.nameservers && z.nameservers.length
+					? _('unknown provider') : _('could not find the zone'))]);
+			if (z.zone) rows.push([_('Zone'), mono(z.zone)]);
+			if (z.nameservers && z.nameservers.length)
+				rows.push([_('Nameservers'), E('div', {}, z.nameservers.map(n => E('div', {}, mono(n))))]);
+			const site = z.cdn || z.ip_network;
+			rows.push([_('Site served by'), site ? pill(site, '#e67e22')
+				: E('span', { style: 'opacity:.6' }, _('no CDN detected'))]);
+			if (z.cname_chain && z.cname_chain.length)
+				rows.push([_('CNAME chain'), E('div', {}, [mono(z.name)].concat(
+					z.cname_chain.map(c => E('div', {}, ['→ ', mono(c)]))))]);
+			if (z.ip_network && !z.cdn)
+				rows.push([_('Detected from'), _('answer IPs are in %s address ranges').format(z.ip_network)]);
+			bx.appendChild(kvTable(rows));
 		});
 	},
 
@@ -390,7 +439,8 @@ return view.extend({
 				  'records appear as you type (↓/↑ to move, Enter to pick); selecting one runs a ' +
 				  'full resolve (cache-first) and shows the answers, route, TTL and timing, which ' +
 				  'routing rule sent it there (suffix / exact match, China list, ad list, ...), ' +
-				  'which upstream answered and a live speed comparison of every upstream in the group. ' +
+				  'which upstream answered, who hosts the domain (DNS provider, nameservers, CDN) and a ' +
+				  'live speed comparison of every upstream in the group. ' +
 				  'Pressing Enter without a selection resolves exactly what you typed.')),
 			E('div', { id: 'checker_wrap', style: 'position:relative; margin:10px 0' }, [
 				input,

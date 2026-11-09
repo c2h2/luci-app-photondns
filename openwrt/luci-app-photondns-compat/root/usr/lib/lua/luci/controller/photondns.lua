@@ -45,6 +45,7 @@ function index()
 	entry({"admin", "services", "photondns", "api", "cachekeys"}, call("action_cachekeys")).leaf = true
 	entry({"admin", "services", "photondns", "api", "resolve"},   call("action_resolve")).leaf = true
 	entry({"admin", "services", "photondns", "api", "compare"},   call("action_compare")).leaf = true
+	entry({"admin", "services", "photondns", "api", "zone"},      call("action_zone")).leaf = true
 	entry({"admin", "services", "photondns", "api", "log"},      call("action_log")).leaf = true
 	entry({"admin", "services", "photondns", "api", "cleanlog"}, call("action_cleanlog")).leaf = true
 	entry({"admin", "services", "photondns", "api", "listupdate"}, call("action_listupdate")).leaf = true
@@ -162,6 +163,21 @@ function action_compare()
 	end
 	if qtype == "" then qtype = "A" end
 	local raw = api_get("/compare?name=" .. name .. "&type=" .. qtype, 7)
+	if raw then
+		write_json({ running = true, raw = raw })
+	else
+		write_json({ running = false, raw = "" })
+	end
+end
+
+-- who hosts a name (CNAME chain / CDN, zone, authoritative nameservers)
+function action_zone()
+	local name = (luci.http.formvalue("name") or ""):gsub("[^%w%.%-_]", "")
+	if name == "" then
+		write_json({ running = false, error = "empty name" })
+		return
+	end
+	local raw = api_get("/zone?name=" .. name, 12)
 	if raw then
 		write_json({ running = true, raw = raw })
 	else

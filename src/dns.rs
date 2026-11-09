@@ -4,6 +4,8 @@
 
 pub const HEADER_LEN: usize = 12;
 pub const TYPE_A: u16 = 1;
+pub const TYPE_NS: u16 = 2;
+pub const TYPE_CNAME: u16 = 5;
 pub const TYPE_SOA: u16 = 6;
 pub const TYPE_PTR: u16 = 12;
 pub const TYPE_AAAA: u16 = 28;
@@ -224,6 +226,8 @@ fn edns_udp_size(buf: &[u8], mut pos: usize, extra_questions: usize) -> u16 {
 
 #[derive(Debug)]
 pub struct RrInfo {
+    /// offset of the owner name
+    pub owner_start: usize,
     pub rtype: u16,
     pub ttl: u32,
     pub ttl_offset: usize,
@@ -247,6 +251,7 @@ fn walk_rrs(buf: &[u8], mut pos: usize, extra_questions: usize) -> Option<Vec<Rr
         if pos == buf.len() {
             break; // tolerate short messages
         }
+        let owner_start = pos;
         pos = skip_name(buf, pos)?;
         let rtype = u16_at(buf, pos)?;
         let ttl = u32_at(buf, pos + 4)?;
@@ -263,6 +268,7 @@ fn walk_rrs(buf: &[u8], mut pos: usize, extra_questions: usize) -> Option<Vec<Rr
             2
         };
         out.push(RrInfo {
+            owner_start,
             rtype,
             ttl,
             ttl_offset: pos + 4,
@@ -413,6 +419,40 @@ pub fn extract_ips(buf: &[u8], question_end: usize) -> Vec<std::net::IpAddr> {
         }
     }
     out
+}
+
+/// A record whose rdata starts with a domain name (CNAME, NS, PTR, SOA's
+/// primary NS): owner -> target. Diagnostics only.
+#[derive(Debug, Clone, PartialEq)]
+pub struct NameRr {
+    pub section: u8,
+    pub rtype: u16,
+    pub owner: String,
+    pub target: String,
+}
+
+/// All CNAME / NS / PTR / SOA records of a response, in wire order.
+pub fn name_records(buf: &[u8], question_end: usize) -> Vec<NameRr> {
+    let qdcount = match u16_at(buf, 4) {
+        Some(q) => q as usize,
+        None => return Vec::new(),
+    };
+    let Some(rrs) = walk_rrs(buf, question_end, qdcount.saturating_sub(1)) else {
+        return Vec::new();
+    };
+    rrs.iter()
+        .filter(|r| matches!(r.rtype, TYPE_CNAME | TYPE_NS | TYPE_PTR | TYPE_SOA))
+        .filter_map(|r| {
+            let (owner, _) = read_name(buf, r.owner_start)?;
+            let (target, _) = read_name(buf, r.rdata_start)?;
+            Some(NameRr {
+                section: r.section,
+                rtype: r.rtype,
+                owner,
+                target,
+            })
+        })
+        .collect()
 }
 
 /// Minimum answer TTL of a response (for redirect synthesis), default `dflt`.

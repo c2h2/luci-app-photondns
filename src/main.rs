@@ -13,6 +13,7 @@ mod dns;
 mod doh;
 mod group;
 mod health;
+mod hosting;
 mod lan;
 mod logger;
 mod qlog;

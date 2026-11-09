@@ -5,6 +5,7 @@
 //!   GET /version
 //!   GET /resolve?name=&type=   dig-like resolve + routing explanation
 //!   GET /compare?name=&type=   ask every upstream of the routed group
+//!   GET /zone?name=             CNAME chain / CDN, zone, authoritative NS
 
 use crate::server::{resolve_named, Ctx};
 use anyhow::Result;
@@ -388,6 +389,30 @@ pub async fn run(ctx: Arc<Ctx>, listen: String) -> Result<()> {
                                 }
                             }
                         }
+                    };
+                    let _ = stream
+                        .write_all(http_json("200 OK", &body.to_string()).as_bytes())
+                        .await;
+                    return;
+                }
+
+                // GET /zone?name=<domain>  -> who hosts it (DNS + CDN)
+                if path.starts_with("/zone?") || path == "/zone" {
+                    let name = query_param(path, "name").unwrap_or_default();
+                    let name = name.trim().trim_end_matches('.').to_string();
+                    let body = if name.is_empty() {
+                        json!({"error": "missing name"})
+                    } else {
+                        let z = crate::server::zone_info(&ctx, &name).await;
+                        json!({
+                            "name": name,
+                            "zone": z.zone,
+                            "nameservers": z.nameservers,
+                            "dns_provider": z.dns_provider,
+                            "cname_chain": z.cname_chain,
+                            "cdn": z.cdn,
+                            "ip_network": z.ip_network,
+                        })
                     };
                     let _ = stream
                         .write_all(http_json("200 OK", &body.to_string()).as_bytes())
