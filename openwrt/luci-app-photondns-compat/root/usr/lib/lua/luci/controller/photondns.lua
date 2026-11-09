@@ -80,6 +80,16 @@ local function api_get(path, secs)
 	return nil
 end
 
+-- "https://www.lilly.com/x" -> "www.lilly.com" before the character filter
+local function host_of(v)
+	local h = (v or ""):lower():gsub("^%s+", ""):gsub("%s+$", "")
+	h = h:gsub("^[%a][%w%+%.%-]*://", "")
+	h = h:gsub("^[^@/?#]*@", "")
+	h = h:match("^[^/?#]*") or ""
+	h = h:gsub(":%d+$", ""):gsub("%.+$", "")
+	return (h:gsub("[^%w%.%-_]", ""))
+end
+
 local function write_json(tbl)
 	luci.http.prepare_content("application/json")
 	luci.http.write_json(tbl)
@@ -137,7 +147,7 @@ end
 
 -- full resolve (cache-first, may hit upstream) for a selected/typed name.
 function action_resolve()
-	local name = (luci.http.formvalue("name") or ""):gsub("[^%w%.%-_]", "")
+	local name = host_of(luci.http.formvalue("name"))
 	local qtype = (luci.http.formvalue("type") or "A"):gsub("[^%w]", "")
 	if name == "" then
 		write_json({ running = false, error = "empty name" })
@@ -155,7 +165,7 @@ end
 -- ask every upstream of the routed group (speed comparison); the daemon
 -- caps each upstream at 4 s, so allow longer than the default 3 s.
 function action_compare()
-	local name = (luci.http.formvalue("name") or ""):gsub("[^%w%.%-_]", "")
+	local name = host_of(luci.http.formvalue("name"))
 	local qtype = (luci.http.formvalue("type") or "A"):gsub("[^%w]", "")
 	if name == "" then
 		write_json({ running = false, error = "empty name" })
@@ -172,7 +182,7 @@ end
 
 -- who hosts a name (CNAME chain / CDN, zone, authoritative nameservers)
 function action_zone()
-	local name = (luci.http.formvalue("name") or ""):gsub("[^%w%.%-_]", "")
+	local name = host_of(luci.http.formvalue("name"))
 	if name == "" then
 		write_json({ running = false, error = "empty name" })
 		return

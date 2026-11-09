@@ -1142,11 +1142,7 @@ msgstr "备用 — 仅在所有主上游超时时使用"
 msgid "(backup - only used when all primaries time out)"
 msgstr "（备用 — 仅在所有主上游超时时使用）"
 
-msgid "Type a domain to search what photondns currently has cached. The 15 closest cached records appear as you type (↓/↑ to move, Enter to pick); selecting one runs a full resolve (cache-first) and shows the answers, route, TTL and timing, which routing rule sent it there (suffix / exact match, China list, ad list, ...), which upstream answered, who hosts the domain (DNS provider, nameservers, CDN) and a live speed comparison of every upstream in the group. Pressing Enter without a selection resolves exactly what you typed."
-msgstr "输入域名，搜索 photondns 当前缓存的内容。输入时显示最接近的 15 条缓存记录（↓/↑ 移动，回车选择）；选中后执行完整解析（优先缓存），显示应答、路由、TTL 和耗时，以及命中的分流规则（后缀 / 完全匹配、国内列表、广告列表等）、由哪个上游应答、域名托管在哪里（DNS 服务商、权威域名服务器、CDN），并实时对比该分组所有上游的速度。未选中时按回车则解析所输入的内容。"
 
-msgid "Type a domain to search what photondns currently has cached. The 15 closest cached records appear as you type; selecting one runs a full resolve and shows the answers, route, TTL and timing, which routing rule sent it there, which upstream answered, who hosts the domain (DNS provider, nameservers, CDN) and a live speed comparison of every upstream in the group."
-msgstr "输入域名，搜索 photondns 当前缓存的内容。输入时显示最接近的 15 条缓存记录；选中后执行完整解析，显示应答、路由、TTL 和耗时，以及命中的分流规则、由哪个上游应答、域名托管在哪里（DNS 服务商、权威域名服务器、CDN），并实时对比该分组所有上游的速度。"
 
 msgid "Hosting"
 msgstr "托管信息"
@@ -1186,3 +1182,36 @@ msgstr "识别依据"
 
 msgid "answer IPs are in %s address ranges"
 msgstr "应答 IP 位于 %s 的地址段"
+
+msgid "Type a domain to search what photondns currently has cached. The 15 closest cached records appear as you type (↓/↑ to move, Enter to pick); selecting one runs a full resolve (cache-first) and shows the answers, route, TTL and timing, which routing rule sent it there (suffix / exact match, China list, ad list, ...), which upstream answered, who hosts the domain (DNS provider, nameservers, CDN) and a live speed comparison of every upstream in the group. Answer IPs get a country flag and map (looked up by your browser at ipwho.is). URLs are reduced to their host name. Pressing Enter without a selection resolves exactly what you typed."
+msgstr "输入域名，搜索 photondns 当前缓存的内容。输入时显示最接近的 15 条缓存记录（↓/↑ 移动，回车选择）；选中后执行完整解析（优先缓存），显示应答、路由、TTL 和耗时，以及命中的分流规则（后缀 / 完全匹配、国内列表、广告列表等）、由哪个上游应答、域名托管在哪里（DNS 服务商、权威域名服务器、CDN），并实时对比该分组所有上游的速度。应答 IP 会显示国旗和地图（由你的浏览器向 ipwho.is 查询）。粘贴网址会自动提取主机名。未选中时按回车则解析所输入的内容。"
+
+msgid "Type a domain to search what photondns currently has cached. The 15 closest cached records appear as you type; selecting one runs a full resolve and shows the answers, route, TTL and timing, which routing rule sent it there, which upstream answered, who hosts the domain (DNS provider, nameservers, CDN) and a live speed comparison of every upstream in the group. Answer IPs get a country flag and map (looked up by your browser at ipwho.is). URLs are reduced to their host name."
+msgstr "输入域名，搜索 photondns 当前缓存的内容。输入时显示最接近的 15 条缓存记录；选中后执行完整解析，显示应答、路由、TTL 和耗时，以及命中的分流规则、由哪个上游应答、域名托管在哪里（DNS 服务商、权威域名服务器、CDN），并实时对比该分组所有上游的速度。应答 IP 会显示国旗和地图（由你的浏览器向 ipwho.is 查询）。粘贴网址会自动提取主机名。"
+
+msgid "fake-IP range"
+msgstr "Fake-IP 地址段"
+
+msgid "private address"
+msgstr "内网地址"
+
+msgid "IP location"
+msgstr "IP 归属地"
+
+msgid "Locating %s..."
+msgstr "正在定位 %s…"
+
+msgid "Could not look up the location (the browser could not reach ipwho.is / ipinfo.io)."
+msgstr "无法查询归属地（浏览器无法访问 ipwho.is / ipinfo.io）。"
+
+msgid "Location by %s, looked up by your browser; map © OpenStreetMap contributors."
+msgstr "归属地数据来自 %s，由你的浏览器查询；地图 © OpenStreetMap 贡献者。"
+
+msgid "GeoIP is approximate - anycast/CDN addresses show where the operator registered them."
+msgstr "IP 归属地仅供参考 — 任播 / CDN 地址显示的是运营商的注册地。"
+
+msgid "Open larger map"
+msgstr "打开大地图"
+
+msgid "Type or paste a domain or URL (e.g. github.com)..."
+msgstr "输入或粘贴域名 / 网址（如 github.com）…"

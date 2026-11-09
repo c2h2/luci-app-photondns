@@ -114,6 +114,119 @@ function explainSentence(name, x) {
 	return '';
 }
 
+// Reduce whatever was pasted (URL, host:port, user@host, trailing dot) to
+// the bare hostname the browser would look up: "https://www.lilly.com/x"
+// -> "www.lilly.com".
+function normalizeHost(v) {
+	let h = String(v || '').trim().toLowerCase();
+	h = h.replace(/^[a-z][a-z0-9+.-]*:\/\//, '');   // scheme://
+	h = h.replace(/^[^@\/?#]*@/, '');                // user:pass@
+	h = h.split(/[\/?#\s]/)[0];                     // path, query, fragment
+	if (h.charAt(0) === '[') h = h.slice(1).split(']')[0];  // [v6]:port
+	else if ((h.match(/:/g) || []).length === 1) h = h.split(':')[0];  // host:port
+	return h.replace(/\.+$/, '');
+}
+
+// "US" -> 🇺🇸 (regional indicator pair). Windows shows the two letters.
+function flagEmoji(cc) {
+	if (!/^[A-Za-z]{2}$/.test(cc || '')) return '🏳️';
+	return String.fromCodePoint.apply(null,
+		cc.toUpperCase().split('').map(c => 0x1F1E6 + c.charCodeAt(0) - 65));
+}
+
+// Addresses with no public location: private, loopback, CGNAT, link-local,
+// benchmark/fake-IP (198.18.0.0/15, used by Clash/OpenClash fake-ip), ULA.
+function privateKind(ip) {
+	const m = /^(\d+)\.(\d+)\./.exec(ip);
+	if (m) {
+		const a = +m[1], b = +m[2];
+		if (a === 198 && (b === 18 || b === 19)) return _('fake-IP range');
+		if (a === 10 || a === 127 || (a === 172 && b >= 16 && b <= 31) ||
+		    (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127) ||
+		    (a === 169 && b === 254) || a === 0)
+			return _('private address');
+		return null;
+	}
+	if (/^(fc|fd|fe8|fe9|fea|feb)/i.test(ip) || ip === '::1') return _('private address');
+	return null;
+}
+
+// IP geolocation, looked up by the browser (never the router): ipwho.is,
+// falling back to ipinfo.io. One request per IP, memoised for the page.
+const geoCache = {};
+function geoLookup(ip) {
+	if (geoCache[ip]) return geoCache[ip];
+	const get = (url) => {
+		const ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+		const t = ctl ? window.setTimeout(() => ctl.abort(), 6000) : null;
+		return fetch(url, ctl ? { signal: ctl.signal } : {})
+			.then(r => r.ok ? r.json() : null)
+			.finally(() => { if (t) window.clearTimeout(t); });
+	};
+	geoCache[ip] = get('https://ipwho.is/' + encodeURIComponent(ip)).then(j => {
+		if (!j || j.success === false) throw new Error('ipwho.is');
+		return {
+			cc: j.country_code, country: j.country, region: j.region, city: j.city,
+			lat: j.latitude, lon: j.longitude,
+			asn: j.connection && j.connection.asn, org: j.connection && (j.connection.org || j.connection.isp),
+			source: 'ipwho.is'
+		};
+	}).catch(() => get('https://ipinfo.io/' + encodeURIComponent(ip) + '/json').then(j => {
+		if (!j || !j.country) return null;
+		const loc = (j.loc || '').split(',');
+		const org = j.org || '';
+		const asm = /^AS(\d+)\s*(.*)$/.exec(org);
+		return {
+			cc: j.country, country: j.country, region: j.region, city: j.city,
+			lat: +loc[0], lon: +loc[1],
+			asn: asm ? +asm[1] : null, org: asm ? asm[2] : org,
+			source: 'ipinfo.io'
+		};
+	})).catch(() => null);
+	return geoCache[ip];
+}
+
+function geoText(g) {
+	if (!g) return '';
+	const parts = [];
+	if (g.city) parts.push(g.city);
+	if (g.region && g.region !== g.city) parts.push(g.region);
+	const place = parts.join(', ');
+	return flagEmoji(g.cc) + ' ' + (g.country || g.cc) + (place ? ' · ' + place : '') +
+		(g.asn ? ' · AS' + g.asn + (g.org ? ' ' + g.org : '') : (g.org ? ' · ' + g.org : ''));
+}
+
+// Fill every <span class="geo" data-ip> placeholder under `root`.
+// `short` = flag only (compact tables), full text otherwise.
+function fillGeo(root) {
+	const els = (root || document).querySelectorAll('.geo[data-ip]:not([data-done])');
+	Array.prototype.forEach.call(els, el => {
+		el.setAttribute('data-done', '1');
+		const ip = el.getAttribute('data-ip');
+		const pk = privateKind(ip);
+		if (pk) { el.textContent = '🏠 ' + pk; return; }
+		el.textContent = '…';
+		geoLookup(ip).then(g => {
+			if (!g) { el.textContent = ''; return; }
+			if (el.getAttribute('data-short')) {
+				el.textContent = flagEmoji(g.cc);
+				el.title = geoText(g);
+			} else {
+				el.textContent = geoText(g);
+			}
+		});
+	});
+}
+
+function geoSpan(ip, short) {
+	const attrs = {
+		class: 'geo', 'data-ip': ip,
+		style: short ? 'margin-left:4px; cursor:help' : 'margin-left:10px; opacity:.85; font-family:sans-serif'
+	};
+	if (short) attrs['data-short'] = '1';
+	return E('span', attrs);
+}
+
 function parseRaw(res) {
 	if (!res || !res.raw) return null;
 	try { return JSON.parse(res.raw); } catch (e) { return null; }
@@ -151,7 +264,8 @@ return view.extend({
 			if (d.error) rows.push([_('Error'), d.error]);
 			rows.push([_('Response code'), d.rcode || '-']);
 			rows.push([_('Answers'), (d.answers && d.answers.length)
-				? E('div', {}, d.answers.map(a => E('div', { style: 'font-family:monospace' }, a)))
+				? E('div', {}, d.answers.map(a => E('div', {}, [
+					E('span', { style: 'font-family:monospace' }, a), geoSpan(a, false)])))
 				: E('span', { style: 'opacity:.6' }, _('(no address records)'))]);
 			if (d.ttl != null) rows.push([_('TTL'), String(d.ttl) + ' s']);
 			// who answered: live winner, else who last filled the cached entry
@@ -203,6 +317,16 @@ return view.extend({
 				b.appendChild(kvTable(er));
 			}
 
+			/* ---- IP location map ---- */
+			const pubIps = (d.answers || []).filter(a => !privateKind(a));
+			if (pubIps.length) {
+				b.appendChild(E('h3', { style: 'margin-top:18px' }, _('IP location')));
+				const mapBox = E('div', { id: 'checker_map' }, E('div', { style: 'opacity:.6' }, _('Locating %s...').format(pubIps[0])));
+				b.appendChild(mapBox);
+				this.runMap(pubIps);
+			}
+			fillGeo(b);
+
 			/* ---- hosting ---- */
 			b.appendChild(E('h3', { style: 'margin-top:18px' }, _('Hosting')));
 			b.appendChild(E('div', { class: 'cbi-section-descr', style: 'margin-bottom:6px' },
@@ -226,6 +350,47 @@ return view.extend({
 					: _('Asks every upstream of the group at the same time, bypassing the cache, so you can compare speed and answers. Does not affect failover health.')));
 			b.appendChild(cmpBox);
 			this.runCompare(d.name || name, type, answeredBy);
+		});
+	},
+
+	// Map of the first answer IP's location (OpenStreetMap embed) plus the
+	// distinct countries of all answers.
+	runMap(ips) {
+		Promise.all(ips.slice(0, 8).map(geoLookup)).then(gs => {
+			const box = document.getElementById('checker_map');
+			if (!box) return;
+			box.innerHTML = '';
+			const found = gs.map((g, i) => [ips[i], g]).filter(x => x[1] && isFinite(x[1].lat) && isFinite(x[1].lon));
+			if (!found.length) {
+				box.appendChild(E('div', { style: 'opacity:.6' },
+					_('Could not look up the location (the browser could not reach ipwho.is / ipinfo.io).')));
+				return;
+			}
+			const seen = {};
+			const countries = found.filter(x => {
+				const k = x[1].cc; if (seen[k]) return false; seen[k] = 1; return true;
+			}).map(x => E('span', {
+				style: 'display:inline-block; margin:0 10px 6px 0; padding:2px 10px; border-radius:12px; ' +
+					'background:rgba(13,110,253,.1); font-size:105%'
+			}, flagEmoji(x[1].cc) + ' ' + (x[1].country || x[1].cc)));
+			const g = found[0][1];
+			const lat = +g.lat, lon = +g.lon;
+			const bbox = [lon - 4, lat - 2.5, lon + 4, lat + 2.5].map(v => v.toFixed(4)).join(',');
+			const src = 'https://www.openstreetmap.org/export/embed.html?bbox=' + bbox +
+				'&layer=mapnik&marker=' + lat.toFixed(5) + ',' + lon.toFixed(5);
+			box.appendChild(E('div', {}, countries));
+			box.appendChild(E('div', { style: 'margin-bottom:6px' }, [
+				mono(found[0][0]), ' ', geoText(g)]));
+			box.appendChild(E('iframe', {
+				src: src, loading: 'lazy', referrerpolicy: 'no-referrer',
+				style: 'width:100%; max-width:760px; height:300px; border:1px solid #ccc; border-radius:6px'
+			}));
+			box.appendChild(E('div', { style: 'font-size:85%; opacity:.6; margin-top:4px' }, [
+				_('Location by %s, looked up by your browser; map © OpenStreetMap contributors.').format(g.source) + ' ' +
+				_('GeoIP is approximate - anycast/CDN addresses show where the operator registered them.'), ' ',
+				E('a', { href: 'https://www.openstreetmap.org/?mlat=' + lat.toFixed(5) + '&mlon=' + lon.toFixed(5) + '#map=6/' + lat.toFixed(4) + '/' + lon.toFixed(4),
+					target: '_blank', rel: 'noopener noreferrer' }, _('Open larger map'))
+			]));
 		});
 	},
 
@@ -305,7 +470,9 @@ return view.extend({
 					E('td', { class: 'td' }, time),
 					E('td', { class: 'td' }, r.rcode || '-'),
 					E('td', { class: 'td', style: 'font-family:monospace; font-size:90%' },
-						(r.answers && r.answers.length) ? r.answers.join(' ') : '-'),
+						(r.answers && r.answers.length)
+							? r.answers.map(a => E('div', { style: 'white-space:nowrap' }, [a, geoSpan(a, true)]))
+							: '-'),
 					E('td', { class: 'td' }, r.ewma_ms ? r.ewma_ms + ' ms' : '-'),
 					E('td', { class: 'td' }, E('span', { style: 'color:' + (r.healthy ? '#2ca02c' : '#d43f3a') },
 						r.healthy ? _('healthy') : _('down')))
@@ -314,6 +481,7 @@ return view.extend({
 			bx.appendChild(E('div', { style: 'margin-bottom:4px' },
 				_('Group "%s" - %d upstreams').format(d.group, d.results.length)));
 			bx.appendChild(E('table', { class: 'table' }, [head].concat(rows)));
+			fillGeo(bx);
 		});
 	},
 
@@ -368,7 +536,7 @@ return view.extend({
 	// Debounced query as the user types.
 	onType(val) {
 		if (this.timer) { window.clearTimeout(this.timer); this.timer = null; }
-		const q = (val || '').trim();
+		const q = normalizeHost(val);
 		this.timer = window.setTimeout(L.bind(function() {
 			callCacheSearch(q, 15).then(res => {
 				const d = parseRaw(res);
@@ -393,8 +561,11 @@ return view.extend({
 			if (this.sel >= 0) this.choose(this.sel);
 			else {
 				// no highlight: resolve exactly what was typed
-				const v = ev.target.value.trim();
-				if (v) { this.items = []; this.renderSuggestions(); this.showResult(v, 'A'); }
+				const v = normalizeHost(ev.target.value);
+				if (v) {
+					ev.target.value = v;
+					this.items = []; this.renderSuggestions(); this.showResult(v, 'A');
+				}
 			}
 		} else if (ev.key === 'Escape') {
 			this.items = []; this.sel = -1; this.renderSuggestions();
@@ -409,7 +580,7 @@ return view.extend({
 			style: 'width:100%; max-width:520px',
 			autocomplete: 'off',
 			spellcheck: 'false',
-			placeholder: _('Start typing a domain (e.g. github.com)...'),
+			placeholder: _('Type or paste a domain or URL (e.g. github.com)...'),
 			keyup: (ev) => {
 				if (['ArrowDown', 'ArrowUp', 'Enter', 'Escape'].indexOf(ev.key) < 0)
 					this.onType(ev.target.value);
@@ -440,7 +611,8 @@ return view.extend({
 				  'full resolve (cache-first) and shows the answers, route, TTL and timing, which ' +
 				  'routing rule sent it there (suffix / exact match, China list, ad list, ...), ' +
 				  'which upstream answered, who hosts the domain (DNS provider, nameservers, CDN) and a ' +
-				  'live speed comparison of every upstream in the group. ' +
+				  'live speed comparison of every upstream in the group. Answer IPs get a country flag ' +
+				  'and map (looked up by your browser at ipwho.is). URLs are reduced to their host name. ' +
 				  'Pressing Enter without a selection resolves exactly what you typed.')),
 			E('div', { id: 'checker_wrap', style: 'position:relative; margin:10px 0' }, [
 				input,

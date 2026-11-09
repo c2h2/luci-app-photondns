@@ -30,6 +30,19 @@ function api_get(path, secs) {
 	return res;
 }
 
+// "https://www.lilly.com/x" -> "www.lilly.com": drop scheme, user@, path and
+// :port before the character filter (which would otherwise glue "https"
+// onto the host).
+function host_of(v) {
+	let h = lc(trim(v || ''));
+	h = replace(h, /^[a-z][a-z0-9+.-]*:\/\//, '');
+	h = replace(h, /^[^@\/?#]*@/, '');
+	h = split(h, /[\/?#]/)[0] || '';
+	h = replace(h, /:[0-9]+$/, '');
+	h = replace(h, /\.+$/, '');
+	return replace(h, /[^a-z0-9._-]/g, '');
+}
+
 function logfile_path() {
 	let c = cursor();
 	c.load('photondns');
@@ -217,7 +230,7 @@ const methods = {
 			try {
 				let name = (req.args ? req.args.name : '') || '';
 				let qtype = (req.args ? req.args.type : 'A') || 'A';
-				name = replace(name, /[^A-Za-z0-9._-]/g, '');
+				name = host_of(name);
 				qtype = replace(qtype, /[^A-Za-z0-9]/g, '');
 				if (length(name) == 0) {
 					return { running: false, error: 'empty name' };
@@ -241,7 +254,7 @@ const methods = {
 			try {
 				let name = (req.args ? req.args.name : '') || '';
 				let qtype = (req.args ? req.args.type : 'A') || 'A';
-				name = replace(name, /[^A-Za-z0-9._-]/g, '');
+				name = host_of(name);
 				qtype = replace(qtype, /[^A-Za-z0-9]/g, '');
 				if (length(name) == 0) {
 					return { running: false, error: 'empty name' };
@@ -263,7 +276,7 @@ const methods = {
 		call: function(req) {
 			try {
 				let name = (req.args ? req.args.name : '') || '';
-				name = replace(name, /[^A-Za-z0-9._-]/g, '');
+				name = host_of(name);
 				if (length(name) == 0) {
 					return { running: false, error: 'empty name' };
 				}

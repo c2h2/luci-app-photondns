@@ -59,6 +59,11 @@ public resolver.
 
 ## Recent changes (November 2026)
 
+- **IP location on Cache Lookup** — every answer IP shows a country flag
+  emoji, country / city and ASN, plus an OpenStreetMap view of the first
+  address (looked up by the browser at ipwho.is, ipinfo.io as fallback;
+  private and fake-IP 198.18.0.0/15 addresses are labelled, not sent).
+  Pasted URLs (`https://www.lilly.com/`) are reduced to their host name.
 - **Who hosts a domain** — the Cache Lookup page (and `/zone?name=…`) finds
   the DNS zone, its authoritative nameservers and the provider behind them
   (Cloudflare, Route 53, Alibaba Cloud DNS, DNSPod, NS1, ...; multi-provider

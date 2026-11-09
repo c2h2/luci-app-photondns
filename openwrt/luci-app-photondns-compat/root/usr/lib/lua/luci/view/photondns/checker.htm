@@ -2,13 +2,13 @@
 
 <h2><%:Cache Lookup%></h2>
 <div class="cbi-map-descr">
-	<%:Type a domain to search what photondns currently has cached. The 15 closest cached records appear as you type; selecting one runs a full resolve and shows the answers, route, TTL and timing, which routing rule sent it there, which upstream answered, who hosts the domain (DNS provider, nameservers, CDN) and a live speed comparison of every upstream in the group.%>
+	<%:Type a domain to search what photondns currently has cached. The 15 closest cached records appear as you type; selecting one runs a full resolve and shows the answers, route, TTL and timing, which routing rule sent it there, which upstream answered, who hosts the domain (DNS provider, nameservers, CDN) and a live speed comparison of every upstream in the group. Answer IPs get a country flag and map (looked up by your browser at ipwho.is). URLs are reduced to their host name.%>
 </div>
 
 <div id="checker_wrap" style="position:relative; margin:10px 0">
 	<input type="text" class="cbi-input-text" id="checker_input" autocomplete="off" spellcheck="false"
 		style="width:100%; max-width:520px"
-		placeholder="<%:Start typing a domain (e.g. github.com)...%>" />
+		placeholder="<%:Type or paste a domain or URL (e.g. github.com)...%>" />
 	<div id="checker_drop" style="display:none; position:absolute; z-index:50; background:var(--background-color-high,#fff); border:1px solid #ccc; border-radius:0 0 4px 4px; max-width:520px; width:100%; box-shadow:0 4px 12px rgba(0,0,0,.15); max-height:360px; overflow:auto"></div>
 </div>
 
@@ -63,6 +63,126 @@
 		return '<span style="padding:1px 8px; border-radius:8px; color:#fff; font-size:90%; background:' +
 			color + '">' + esc(route || '?') + '</span>';
 	}
+	function normalizeHost(v) {
+		var h = String(v || '').replace(/^\s+|\s+$/g, '').toLowerCase();
+		h = h.replace(/^[a-z][a-z0-9+.\-]*:\/\//, '');
+		h = h.replace(/^[^@\/?#]*@/, '');
+		h = h.split(/[\/?#\s]/)[0];
+		if (h.charAt(0) === '[') h = h.slice(1).split(']')[0];
+		else if ((h.match(/:/g) || []).length === 1) h = h.split(':')[0];
+		return h.replace(/\.+$/, '');
+	}
+	function flagEmoji(cc) {
+		if (!/^[A-Za-z]{2}$/.test(cc || '') || !String.fromCodePoint) return '';
+		var u = cc.toUpperCase();
+		return String.fromCodePoint(0x1F1E6 + u.charCodeAt(0) - 65, 0x1F1E6 + u.charCodeAt(1) - 65);
+	}
+	function privateKind(ip) {
+		var m = /^(\d+)\.(\d+)\./.exec(ip);
+		if (m) {
+			var a = +m[1], b = +m[2];
+			if (a === 198 && (b === 18 || b === 19)) return '<%:fake-IP range%>';
+			if (a === 10 || a === 127 || (a === 172 && b >= 16 && b <= 31) ||
+			    (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127) ||
+			    (a === 169 && b === 254) || a === 0)
+				return '<%:private address%>';
+			return null;
+		}
+		if (/^(fc|fd|fe8|fe9|fea|feb)/i.test(ip) || ip === '::1') return '<%:private address%>';
+		return null;
+	}
+	// IP geolocation by the browser: ipwho.is, falling back to ipinfo.io
+	var geoCache = {}, geoWait = {};
+	function getJson(url, cb) {
+		var x = new XMLHttpRequest();
+		x.open('GET', url, true);
+		x.timeout = 6000;
+		x.onload = function() {
+			var j = null;
+			try { j = JSON.parse(x.responseText); } catch (e) {}
+			cb(x.status === 200 ? j : null);
+		};
+		x.onerror = x.ontimeout = function() { cb(null); };
+		x.send();
+	}
+	function geoLookup(ip, cb) {
+		if (geoCache.hasOwnProperty(ip)) { cb(geoCache[ip]); return; }
+		if (geoWait[ip]) { geoWait[ip].push(cb); return; }
+		geoWait[ip] = [cb];
+		var done = function(g) {
+			geoCache[ip] = g;
+			var w = geoWait[ip]; delete geoWait[ip];
+			for (var i = 0; i < w.length; i++) w[i](g);
+		};
+		getJson('https://ipwho.is/' + encodeURIComponent(ip), function(j) {
+			if (j && j.success !== false && j.country_code) {
+				done({ cc: j.country_code, country: j.country, region: j.region, city: j.city,
+					lat: j.latitude, lon: j.longitude,
+					asn: j.connection && j.connection.asn,
+					org: j.connection && (j.connection.org || j.connection.isp), source: 'ipwho.is' });
+				return;
+			}
+			getJson('https://ipinfo.io/' + encodeURIComponent(ip) + '/json', function(k) {
+				if (!k || !k.country) { done(null); return; }
+				var loc = (k.loc || '').split(','), org = k.org || '';
+				var am = /^AS(\d+)\s*(.*)$/.exec(org);
+				done({ cc: k.country, country: k.country, region: k.region, city: k.city,
+					lat: +loc[0], lon: +loc[1], asn: am ? +am[1] : null, org: am ? am[2] : org,
+					source: 'ipinfo.io' });
+			});
+		});
+	}
+	function geoText(g) {
+		if (!g) return '';
+		var parts = [];
+		if (g.city) parts.push(g.city);
+		if (g.region && g.region !== g.city) parts.push(g.region);
+		return flagEmoji(g.cc) + ' ' + (g.country || g.cc) + (parts.length ? ' · ' + parts.join(', ') : '') +
+			(g.asn ? ' · AS' + g.asn + (g.org ? ' ' + g.org : '') : (g.org ? ' · ' + g.org : ''));
+	}
+	function geoSpan(ip, short) {
+		return '<span class="geo" data-ip="' + esc(ip) + '"' + (short ? ' data-short="1"' : '') +
+			' style="' + (short ? 'margin-left:4px; cursor:help' : 'margin-left:10px; opacity:.85; font-family:sans-serif') +
+			'"></span>';
+	}
+	function fillGeo(root) {
+		var els = (root || document).querySelectorAll('.geo[data-ip]');
+		for (var i = 0; i < els.length; i++) (function(el) {
+			if (el.getAttribute('data-done')) return;
+			el.setAttribute('data-done', '1');
+			var ip = el.getAttribute('data-ip'), pk = privateKind(ip);
+			if (pk) { el.textContent = '🏠 ' + pk; return; }
+			el.textContent = '…';
+			geoLookup(ip, function(g) {
+				if (!g) { el.textContent = ''; return; }
+				if (el.getAttribute('data-short')) { el.textContent = flagEmoji(g.cc) || g.cc; el.title = geoText(g); }
+				else el.textContent = geoText(g);
+			});
+		})(els[i]);
+	}
+	function runMap(ips) {
+		var box = document.getElementById('checker_map');
+		if (!box || !ips.length) return;
+		geoLookup(ips[0], function(g) {
+			var b = document.getElementById('checker_map');
+			if (!b) return;
+			if (!g || !isFinite(g.lat) || !isFinite(g.lon)) {
+				b.innerHTML = '<div style="opacity:.6"><%:Could not look up the location (the browser could not reach ipwho.is / ipinfo.io).%></div>';
+				return;
+			}
+			var lat = +g.lat, lon = +g.lon;
+			var bbox = [lon - 4, lat - 2.5, lon + 4, lat + 2.5].map(function(v) { return v.toFixed(4); }).join(',');
+			b.innerHTML = '<div style="margin-bottom:6px">' + mono(ips[0]) + ' ' + esc(geoText(g)) + '</div>' +
+				'<iframe loading="lazy" referrerpolicy="no-referrer" style="width:100%; max-width:760px; height:300px; border:1px solid #ccc; border-radius:6px" src="' +
+				'https://www.openstreetmap.org/export/embed.html?bbox=' + bbox + '&amp;layer=mapnik&amp;marker=' +
+				lat.toFixed(5) + ',' + lon.toFixed(5) + '"></iframe>' +
+				'<div style="font-size:85%; opacity:.6; margin-top:4px">' + esc(g.source) +
+				' · © OpenStreetMap contributors · <%:GeoIP is approximate - anycast/CDN addresses show where the operator registered them.%> ' +
+				'<a target="_blank" rel="noopener noreferrer" href="https://www.openstreetmap.org/?mlat=' + lat.toFixed(5) +
+				'&amp;mlon=' + lon.toFixed(5) + '#map=6/' + lat.toFixed(4) + '/' + lon.toFixed(4) + '"><%:Open larger map%></a></div>';
+		});
+	}
+
 	function mono(t) {
 		return '<span style="font-family:monospace; word-break:break-all">' + esc(t) + '</span>';
 	}
@@ -184,14 +304,21 @@
 				h += '<tr class="tr"><td class="td">' + mono(r.upstream) + tags + '</td>' +
 					'<td class="td">' + time + '</td>' +
 					'<td class="td">' + esc(r.rcode || '-') + '</td>' +
-					'<td class="td" style="font-family:monospace; font-size:90%">' +
-						esc((r.answers && r.answers.length) ? r.answers.join(' ') : '-') + '</td>' +
+					'<td class="td" style="font-family:monospace; font-size:90%">' + ansCell(r.answers) + '</td>' +
 					'<td class="td">' + (r.ewma_ms ? esc(r.ewma_ms + ' ms') : '-') + '</td>' +
 					'<td class="td"><span style="color:' + (r.healthy ? '#2ca02c' : '#d43f3a') + '">' +
 						(r.healthy ? '<%:healthy%>' : '<%:down%>') + '</span></td></tr>';
 			}
 			bx.innerHTML = h + '</table>';
+			fillGeo(bx);
 		});
+	}
+	function ansCell(list) {
+		if (!list || !list.length) return '-';
+		var h = '';
+		for (var i = 0; i < list.length; i++)
+			h += '<div style="white-space:nowrap">' + esc(list[i]) + geoSpan(list[i], true) + '</div>';
+		return h;
 	}
 
 	function parseRaw(res) {
@@ -229,7 +356,8 @@
 			if (d.answers && d.answers.length) {
 				answers = '';
 				for (var i = 0; i < d.answers.length; i++)
-					answers += '<div style="font-family:monospace">' + esc(d.answers[i]) + '</div>';
+					answers += '<div><span style="font-family:monospace">' + esc(d.answers[i]) + '</span>' +
+						geoSpan(d.answers[i], false) + '</div>';
 			} else {
 				answers = '<span style="opacity:.6"><%:(no address records)%></span>';
 			}
@@ -254,6 +382,11 @@
 			html += '</table>';
 			if (d.explain) html += explainHtml(d.explain);
 			var qn = d.name || name, qt = type || 'A';
+			var pubIps = [];
+			for (var pi = 0; d.answers && pi < d.answers.length; pi++)
+				if (!privateKind(d.answers[pi])) pubIps.push(d.answers[pi]);
+			if (pubIps.length)
+				html += '<h3 style="margin-top:18px"><%:IP location%></h3><div id="checker_map"><div style="opacity:.6">…</div></div>';
 			html += '<h3 style="margin-top:18px"><%:Hosting%></h3>' +
 				'<div class="cbi-section-descr" style="margin-bottom:6px"><%:The authoritative nameservers hold the real records; the resolvers above just ask them. A CNAME chain or the answer IPs reveal the CDN serving the site.%></div>' +
 				'<div id="checker_zone"><div style="opacity:.6"><%:Looking up nameservers...%></div></div>';
@@ -266,6 +399,8 @@
 				'</div><div id="checker_compare"></div>';
 			b.innerHTML = html;
 			document.getElementById('checker_rerun').onclick = function() { runCompare(qn, qt, answeredBy); };
+			fillGeo(b);
+			runMap(pubIps);
 			runZone(qn);
 			runCompare(qn, qt, answeredBy);
 		});
@@ -319,7 +454,7 @@
 	// Debounced query as the user types.
 	function onType(val) {
 		if (timer) { window.clearTimeout(timer); timer = null; }
-		var q = (val || '').replace(/^\s+|\s+$/g, '');
+		var q = normalizeHost(val);
 		timer = window.setTimeout(function() {
 			XHR.get(searchUrl, { q: q, limit: 15 }, function(x, res) {
 				var d = parseRaw(res);
@@ -351,8 +486,8 @@
 			if (sel >= 0) {
 				choose(sel);
 			} else {
-				var v = ev.target.value.replace(/^\s+|\s+$/g, '');
-				if (v) { items = []; sel = -1; renderSuggestions(); showResult(v, 'A'); }
+				var v = normalizeHost(ev.target.value);
+				if (v) { ev.target.value = v; items = []; sel = -1; renderSuggestions(); showResult(v, 'A'); }
 			}
 		} else if (ev.key === 'Escape') {
 			items = []; sel = -1; renderSuggestions();

@@ -1129,11 +1129,7 @@ msgstr ""
 msgid "(backup - only used when all primaries time out)"
 msgstr ""
 
-msgid "Type a domain to search what photondns currently has cached. The 15 closest cached records appear as you type (↓/↑ to move, Enter to pick); selecting one runs a full resolve (cache-first) and shows the answers, route, TTL and timing, which routing rule sent it there (suffix / exact match, China list, ad list, ...), which upstream answered, who hosts the domain (DNS provider, nameservers, CDN) and a live speed comparison of every upstream in the group. Pressing Enter without a selection resolves exactly what you typed."
-msgstr ""
 
-msgid "Type a domain to search what photondns currently has cached. The 15 closest cached records appear as you type; selecting one runs a full resolve and shows the answers, route, TTL and timing, which routing rule sent it there, which upstream answered, who hosts the domain (DNS provider, nameservers, CDN) and a live speed comparison of every upstream in the group."
-msgstr ""
 
 msgid "Hosting"
 msgstr ""
@@ -1172,4 +1168,37 @@ msgid "Detected from"
 msgstr ""
 
 msgid "answer IPs are in %s address ranges"
+msgstr ""
+
+msgid "Type a domain to search what photondns currently has cached. The 15 closest cached records appear as you type (↓/↑ to move, Enter to pick); selecting one runs a full resolve (cache-first) and shows the answers, route, TTL and timing, which routing rule sent it there (suffix / exact match, China list, ad list, ...), which upstream answered, who hosts the domain (DNS provider, nameservers, CDN) and a live speed comparison of every upstream in the group. Answer IPs get a country flag and map (looked up by your browser at ipwho.is). URLs are reduced to their host name. Pressing Enter without a selection resolves exactly what you typed."
+msgstr ""
+
+msgid "Type a domain to search what photondns currently has cached. The 15 closest cached records appear as you type; selecting one runs a full resolve and shows the answers, route, TTL and timing, which routing rule sent it there, which upstream answered, who hosts the domain (DNS provider, nameservers, CDN) and a live speed comparison of every upstream in the group. Answer IPs get a country flag and map (looked up by your browser at ipwho.is). URLs are reduced to their host name."
+msgstr ""
+
+msgid "fake-IP range"
+msgstr ""
+
+msgid "private address"
+msgstr ""
+
+msgid "IP location"
+msgstr ""
+
+msgid "Locating %s..."
+msgstr ""
+
+msgid "Could not look up the location (the browser could not reach ipwho.is / ipinfo.io)."
+msgstr ""
+
+msgid "Location by %s, looked up by your browser; map © OpenStreetMap contributors."
+msgstr ""
+
+msgid "GeoIP is approximate - anycast/CDN addresses show where the operator registered them."
+msgstr ""
+
+msgid "Open larger map"
+msgstr ""
+
+msgid "Type or paste a domain or URL (e.g. github.com)..."
 msgstr ""

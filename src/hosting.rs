@@ -83,6 +83,14 @@ const CDN_PROVIDERS: &[(&str, &str)] = &[
     (".cdntip.com", "Tencent Cloud CDN"),
     (".tencent-cloud.net", "Tencent Cloud"),
     (".shifen.com", "Baidu"),
+    (".bilicdn1.com", "Bilibili CDN"),
+    (".eo.dnse0.com", "Tencent EdgeOne"),
+    (".eo.dnse1.com", "Tencent EdgeOne"),
+    (".eo.dnse2.com", "Tencent EdgeOne"),
+    (".eo.dnse3.com", "Tencent EdgeOne"),
+    (".eo.dnse4.com", "Tencent EdgeOne"),
+    (".eo.dnse5.com", "Tencent EdgeOne"),
+    (".jcloud-cdn.com", "JD Cloud CDN"),
     (".bcebos.com", "Baidu Cloud"),
     (".wscdns.com", "Wangsu (ChinaNetCenter)"),
     (".wswebcdn.com", "Wangsu (ChinaNetCenter)"),
@@ -230,5 +238,10 @@ mod tests {
         );
         assert_eq!(cdn_provider(&ns(&["d1.cloudfront.net"])), Some("Amazon CloudFront"));
         assert_eq!(cdn_provider(&ns(&["foo.example.net"])), None);
+        assert_eq!(cdn_provider(&ns(&["www.zhihu.com.eo.dnse0.com"])), Some("Tencent EdgeOne"));
+        assert_eq!(
+            cdn_provider(&ns(&["www.jd.com.gslb.qianxun.com", "www.jd.com.s.galileo.jcloud-cdn.com", "wwwv6.jcloudimg.com"])),
+            Some("JD Cloud CDN")
+        );
     }
 }
