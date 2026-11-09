@@ -304,6 +304,11 @@ o:value("tls://1.12.12.12", translate("DNSPod (DoT)"))
 o.default = "udp://223.5.5.5"
 o:depends("china_list", "1")
 
+o = s:taboption("upstream", Flag, "local_direct", translate("Bypass proxy for China DNS"),
+	translate("Mark these queries with the bypass fwmark so a transparent proxy on this router (e.g. Passwall) sends them out directly"))
+o.default = "0"
+o:depends("china_list", "1")
+
 o = s:taboption("upstream", DummyValue, "_chinalist_status", translate("China list status"))
 o:depends("china_list", "1")
 o.rawhtml = true
@@ -321,6 +326,18 @@ o:value("https://dns.google/dns-query", translate("Google (DoH)"))
 o:value("udp://9.9.9.9", translate("Quad9 (UDP)"))
 o.default = "tcp://1.1.1.1"
 o.rmempty = false
+
+o = s:taboption("upstream", Flag, "upstream_direct", translate("Bypass proxy for overseas DNS"),
+	translate("Mark these queries with the bypass fwmark so they go out directly instead of through a transparent proxy on this router. Off = they follow your proxy rules (usually recommended in mainland China)"))
+o.default = "0"
+
+o = s:taboption("upstream", Value, "direct_mark", translate("Bypass fwmark"),
+	translate("SO_MARK value set on upstream sockets of bypassing groups. Passwall / Passwall2 skip mark 255 (0xff)"))
+o.datatype = "range(1,4294967295)"
+o.placeholder = "255"
+o.default = "255"
+o:depends("upstream_direct", "1")
+o:depends({ china_list = "1", local_direct = "1" })
 
 ---- adblock ----
 o = s:taboption("adblock", Flag, "adblock", translate("Enable DNS ad blocking"),

@@ -52,6 +52,9 @@ get_config() {
 	config_get bootstrap_dns $1 bootstrap_dns "223.5.5.5"
 	config_get insecure_skip_verify $1 insecure_skip_verify 0
 	config_get idle_timeout $1 idle_timeout 30
+	config_get upstream_direct $1 upstream_direct 0
+	config_get local_direct $1 local_direct 0
+	config_get direct_mark $1 direct_mark 255
 	config_get reject_type65 $1 reject_type65 0
 	config_get aaaa_mode $1 aaaa_mode "allow"
 	config_get hosts_ttl $1 hosts_ttl 300
@@ -95,6 +98,12 @@ generate_config() {
 	config_list_foreach main backup_upstream append_backup
 	config_list_foreach main local_upstream append_local
 	[ -z "$upstream_list" ] && upstream_list="\"tcp://1.1.1.1\", "
+
+	# "direct" groups stamp a fwmark on their sockets so proxies (Passwall
+	# skips mark 0xff) leave router-originated DNS traffic alone
+	local main_mark=0 local_mark=0
+	[ "$upstream_direct" = "1" ] && main_mark="$direct_mark"
+	[ "$local_direct" = "1" ] && local_mark="$direct_mark"
 
 	local cache_enabled=$(bool_str $cache)
 	local dump_file=""
@@ -202,6 +211,7 @@ generate_config() {
 	insecure_skip_verify = $(bool_str $insecure_skip_verify)
 	bootstrap = "$bootstrap_dns"
 	idle_timeout = $idle_timeout
+	so_mark = $main_mark
 	EOF
 
 	[ -n "$local_list" ] && cat >> $CONF <<-EOF
@@ -215,6 +225,7 @@ generate_config() {
 	insecure_skip_verify = $(bool_str $insecure_skip_verify)
 	bootstrap = "$bootstrap_dns"
 	idle_timeout = $idle_timeout
+	so_mark = $local_mark
 	EOF
 }
 

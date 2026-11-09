@@ -61,11 +61,25 @@ impl Group {
         }
         .map_err(|_| anyhow!("group {}: bad bootstrap '{}'", g.name, g.bootstrap))?;
         let timeout = Duration::from_millis(g.timeout_ms.max(100));
+        if g.so_mark != 0 {
+            if cfg!(any(target_os = "linux", target_os = "android")) {
+                log::info!("group {}: upstream sockets use fwmark {:#x}", g.name, g.so_mark);
+            } else {
+                log::warn!("group {}: so_mark is Linux-only, ignored", g.name);
+            }
+        }
         let mk = |addrs: &[String]| -> Result<Vec<Arc<Upstream>>> {
             addrs
                 .iter()
                 .map(|a| {
-                    Upstream::new(a, g.insecure_skip_verify, g.idle_timeout, timeout, bootstrap)
+                    Upstream::new(
+                        a,
+                        g.insecure_skip_verify,
+                        g.idle_timeout,
+                        timeout,
+                        bootstrap,
+                        g.so_mark,
+                    )
                 })
                 .collect()
         };

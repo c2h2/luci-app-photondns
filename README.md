@@ -130,6 +130,11 @@ public resolver.
 - **China / non-China split DNS** — one click downloads the
   dnsmasq-china-list (~110k domains); mainland domains resolve via your local
   group, everything else via the main group
+- **Proxy bypass per group** — upstream sockets of a group can carry an
+  `SO_MARK` fwmark (group `so_mark`; UCI `upstream_direct` / `local_direct` +
+  `direct_mark`, default 255), so a transparent proxy on the same router
+  (Passwall / Passwall2 skip mark 0xff) sends that group's queries direct
+  without any proxy rules. Off by default: queries follow your proxy rules
 - **Ad blocking** with auto-updated lists (anti-AD, AdRules, hosts format)
 - **Live query log** in LuCI (client, domain, route, upstream, latency)
 - Special-TLD (`.local`/`.lan`) and private-PTR protection, optional

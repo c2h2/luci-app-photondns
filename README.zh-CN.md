@@ -113,6 +113,10 @@ cargo build --release
   IPv6（AAAA）处理模式：放行 / 有 IPv4 则拦截 / 全部拦截
 - **国内 / 国外分流** — 一键下载 dnsmasq-china-list（约 11 万域名），
   大陆域名走本地组，其余走主组
+- **按分组绕过代理** — 可为某个分组的上游套接字打上 `SO_MARK` 标记
+  （分组 `so_mark`；UCI `upstream_direct` / `local_direct` + `direct_mark`，
+  默认 255），同一路由器上的透明代理（Passwall / Passwall2 放行标记 0xff）
+  即直连发出该分组的查询，无需配置代理规则。默认关闭：查询按代理规则走
 - **广告拦截**，列表自动更新（anti-AD、AdRules、hosts 格式）
 - LuCI **实时查询日志**（客户端、域名、路由、上游、延迟）
 - 特殊 TLD（`.local`/`.lan`）与内网 PTR 保护，可选拒绝 HTTPS/SVCB

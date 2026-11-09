@@ -158,6 +158,7 @@ impl Upstream {
         idle_timeout: u64,
         query_timeout: Duration,
         bootstrap: SocketAddr,
+        mark: u32,
     ) -> Result<Arc<Self>> {
         let (scheme, host, port, path) = parse_addr(addr)?;
         let ip: Option<IpAddr> = host.parse().ok();
@@ -166,6 +167,7 @@ impl Upstream {
         let tune = TcpTuning {
             keepalive: idle,
             user_timeout: query_timeout.max(Duration::from_secs(1)),
+            mark,
         };
 
         let up = Arc::new(Upstream {
@@ -176,7 +178,7 @@ impl Upstream {
             path,
             state: UpstreamState::new(),
             resolved: RwLock::new(ip.map(|i| SocketAddr::new(i, port))),
-            udp: matches!(scheme, Scheme::Udp).then(UdpTransport::new),
+            udp: matches!(scheme, Scheme::Udp).then(|| UdpTransport::new(mark)),
             pipe: matches!(scheme, Scheme::Udp | Scheme::Tcp | Scheme::Tls).then(|| {
                 PipePool::new(
                     matches!(scheme, Scheme::Tls).then(|| (tls_connector(insecure), sni.clone())),
@@ -193,7 +195,7 @@ impl Upstream {
             let u = up.clone();
             tokio::spawn(async move {
                 loop {
-                    match bootstrap_resolve(&u.host, bootstrap).await {
+                    match bootstrap_resolve(&u.host, bootstrap, mark).await {
                         Ok(addr) => {
                             let sa = SocketAddr::new(addr, u.port);
                             let changed = *u.resolved.read() != Some(sa);
@@ -315,11 +317,45 @@ impl Upstream {
 /// connections (also keeps NAT state alive); `user_timeout` (Linux only)
 /// aborts a connection whose sent data stays unacked that long, so a
 /// blackholed socket errors out in seconds instead of the ~15 min default
-/// retransmission cycle.
+/// retransmission cycle. `mark` is the SO_MARK applied before connect
+/// (0 = none).
 #[derive(Clone, Copy)]
 struct TcpTuning {
     keepalive: Duration,
     user_timeout: Duration,
+    mark: u32,
+}
+
+/// Stamp SO_MARK on an upstream socket (0 = leave unmarked). Needs
+/// CAP_NET_ADMIN; on failure the socket still works, just unmarked, so warn
+/// once rather than fail every query.
+fn set_mark(sock: socket2::SockRef<'_>, mark: u32) {
+    if mark == 0 {
+        return;
+    }
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    if let Err(e) = sock.set_mark(mark) {
+        static WARNED: AtomicBool = AtomicBool::new(false);
+        if !WARNED.swap(true, Ordering::Relaxed) {
+            log::warn!("SO_MARK {:#x} failed ({}); upstream traffic is unmarked", mark, e);
+        }
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "android")))]
+    let _ = sock;
+}
+
+/// TCP connect with the fwmark set before the SYN goes out.
+async fn connect_tcp(target: SocketAddr, mark: u32) -> std::io::Result<TcpStream> {
+    if mark == 0 {
+        return TcpStream::connect(target).await;
+    }
+    let sock = if target.is_ipv4() {
+        tokio::net::TcpSocket::new_v4()?
+    } else {
+        tokio::net::TcpSocket::new_v6()?
+    };
+    set_mark(socket2::SockRef::from(&sock), mark);
+    sock.connect(target).await
 }
 
 fn tune_tcp(tcp: &TcpStream, t: TcpTuning) {
@@ -334,13 +370,14 @@ fn tune_tcp(tcp: &TcpStream, t: TcpTuning) {
 }
 
 /// Resolve a hostname via the bootstrap plain-DNS server (A, then AAAA).
-async fn bootstrap_resolve(host: &str, bootstrap: SocketAddr) -> Result<IpAddr> {
+async fn bootstrap_resolve(host: &str, bootstrap: SocketAddr, mark: u32) -> Result<IpAddr> {
     let sock = UdpSocket::bind(if bootstrap.is_ipv4() {
         "0.0.0.0:0"
     } else {
         "[::]:0"
     })
     .await?;
+    set_mark(socket2::SockRef::from(&sock), mark);
     for qtype in [dns::TYPE_A, dns::TYPE_AAAA] {
         let q = dns::build_query(host, qtype, 1).ok_or_else(|| anyhow!("bad name"))?;
         for _ in 0..2 {
@@ -375,12 +412,14 @@ struct UdpSock {
 
 struct UdpTransport {
     socks: tokio::sync::OnceCell<Vec<Arc<UdpSock>>>,
+    mark: u32,
 }
 
 impl UdpTransport {
-    fn new() -> Self {
+    fn new(mark: u32) -> Self {
         Self {
             socks: tokio::sync::OnceCell::new(),
+            mark,
         }
     }
 
@@ -390,7 +429,9 @@ impl UdpTransport {
             .get_or_try_init(|| async {
                 let mut socks = Vec::with_capacity(UDP_SOCKETS);
                 for _ in 0..UDP_SOCKETS {
-                    let sock = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
+                    let sock = UdpSocket::bind("0.0.0.0:0").await?;
+                    set_mark(socket2::SockRef::from(&sock), self.mark);
+                    let sock = Arc::new(sock);
                     let us = Arc::new(UdpSock {
                         sock,
                         pending: Mutex::new(HashMap::new()),
@@ -650,7 +691,7 @@ impl PipePool {
             }
         }
         let connect = async {
-            let tcp = TcpStream::connect(target).await?;
+            let tcp = connect_tcp(target, self.tune.mark).await?;
             tune_tcp(&tcp, self.tune);
             let stream: Box<dyn Io> = match &self.tls {
                 None => Box::new(tcp),
@@ -734,7 +775,7 @@ impl DohPool {
     }
 
     async fn dial(&self, target: SocketAddr) -> Result<Box<dyn Io>> {
-        let tcp = TcpStream::connect(target).await?;
+        let tcp = connect_tcp(target, self.tune.mark).await?;
         tune_tcp(&tcp, self.tune);
         let name = ServerName::try_from(self.sni.clone())
             .map_err(|_| anyhow!("bad SNI '{}'", self.sni))?;
@@ -977,6 +1018,7 @@ mod tests {
             30,
             timeout,
             "127.0.0.1:53".parse().unwrap(),
+            0,
         )
         .unwrap()
     }

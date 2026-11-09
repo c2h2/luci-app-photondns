@@ -926,3 +926,20 @@ msgstr ""
 msgid "Free and open-source software, licensed under GPL-3.0-only."
 msgstr ""
 
+msgid "Bypass proxy for China DNS"
+msgstr ""
+
+msgid "Mark these queries with the bypass fwmark so a transparent proxy on this router (e.g. Passwall) sends them out directly"
+msgstr ""
+
+msgid "Bypass proxy for overseas DNS"
+msgstr ""
+
+msgid "Mark these queries with the bypass fwmark so they go out directly instead of through a transparent proxy on this router. Off = they follow your proxy rules (usually recommended in mainland China)"
+msgstr ""
+
+msgid "Bypass fwmark"
+msgstr ""
+
+msgid "SO_MARK value set on upstream sockets of bypassing groups. Passwall / Passwall2 skip mark 255 (0xff)"
+msgstr ""

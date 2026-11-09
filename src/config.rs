@@ -240,6 +240,12 @@ pub struct GroupCfg {
     /// idle seconds before pooled TCP/TLS connections are closed
     #[serde(default = "default_idle_timeout")]
     pub idle_timeout: u64,
+    /// SO_MARK (fwmark) stamped on every upstream socket of this group,
+    /// including bootstrap lookups; 0 = off. Linux only. Proxy tools use a
+    /// mark to recognise traffic that must bypass them - e.g. Passwall skips
+    /// mark 0xff (255), so 255 sends this group's queries direct.
+    #[serde(default)]
+    pub so_mark: u32,
 }
 
 fn default_listen() -> Vec<String> {
@@ -400,6 +406,7 @@ impl Config {
                 insecure_skip_verify: false,
                 bootstrap: default_bootstrap(),
                 idle_timeout: default_idle_timeout(),
+                so_mark: 0,
             });
         }
         for g in &cfg.groups {
