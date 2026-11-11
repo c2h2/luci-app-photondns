@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-photondns-compat
-PKG_VERSION:=1.3.4
+PKG_VERSION:=1.3.5
 PKG_RELEASE:=1
 
 PKG_LICENSE:=GPL-3.0-only
