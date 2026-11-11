@@ -306,7 +306,7 @@ o:depends("china_list", "1")
 
 o = s:taboption("upstream", Flag, "local_direct", translate("Bypass proxy for China DNS"),
 	translate("Mark these queries with the bypass fwmark so a transparent proxy on this router (e.g. Passwall) sends them out directly"))
-o.default = "0"
+o.default = "1"
 o:depends("china_list", "1")
 
 o = s:taboption("upstream", DummyValue, "_chinalist_status", translate("China list status"))
@@ -328,8 +328,8 @@ o.default = "tcp://1.1.1.1"
 o.rmempty = false
 
 o = s:taboption("upstream", Flag, "upstream_direct", translate("Bypass proxy for overseas DNS"),
-	translate("Mark these queries with the bypass fwmark so they go out directly instead of through a transparent proxy on this router. Off = they follow your proxy rules (usually recommended in mainland China)"))
-o.default = "0"
+	translate("Mark these queries with the bypass fwmark so they go out directly instead of through a transparent proxy on this router. On by default so DNS (incl. bootstrap) works before the proxy is up; turn off to send them through your proxy rules"))
+o.default = "1"
 
 o = s:taboption("upstream", Value, "direct_mark", translate("Bypass fwmark"),
 	translate("SO_MARK value set on upstream sockets of bypassing groups. Passwall / Passwall2 skip mark 255 (0xff)"))

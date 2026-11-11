@@ -341,7 +341,7 @@ return view.extend({
 
 		o = s.taboption('upstream', form.Flag, 'local_direct', _('Bypass proxy for China DNS'),
 			_('Mark these queries with the bypass fwmark so a transparent proxy on this router (e.g. Passwall) sends them out directly'));
-		o.default = '0';
+		o.default = '1';
 		o.depends('china_list', '1');
 
 		o = s.taboption('upstream', form.DummyValue, '_chinalist_status', _('China list status'));
@@ -361,8 +361,8 @@ return view.extend({
 		o.rmempty = false;
 
 		o = s.taboption('upstream', form.Flag, 'upstream_direct', _('Bypass proxy for overseas DNS'),
-			_('Mark these queries with the bypass fwmark so they go out directly instead of through a transparent proxy on this router. Off = they follow your proxy rules (usually recommended in mainland China)'));
-		o.default = '0';
+			_('Mark these queries with the bypass fwmark so they go out directly instead of through a transparent proxy on this router. On by default so DNS (incl. bootstrap) works before the proxy is up; turn off to send them through your proxy rules'));
+		o.default = '1';
 
 		o = s.taboption('upstream', form.Value, 'direct_mark', _('Bypass fwmark'),
 			_('SO_MARK value set on upstream sockets of bypassing groups. Passwall / Passwall2 skip mark 255 (0xff)'));

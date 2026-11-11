@@ -948,8 +948,8 @@ msgstr "为这些查询打上绕过标记（fwmark），让本路由器上的透
 msgid "Bypass proxy for overseas DNS"
 msgstr "国外 DNS 绕过代理"
 
-msgid "Mark these queries with the bypass fwmark so they go out directly instead of through a transparent proxy on this router. Off = they follow your proxy rules (usually recommended in mainland China)"
-msgstr "为这些查询打上绕过标记（fwmark），直连发出而不经过本路由器上的透明代理。关闭则按代理规则走（中国大陆通常建议关闭）"
+msgid "Mark these queries with the bypass fwmark so they go out directly instead of through a transparent proxy on this router. On by default so DNS (incl. bootstrap) works before the proxy is up; turn off to send them through your proxy rules"
+msgstr "为这些查询打上绕过标记（fwmark），直连发出而不经过本路由器上的透明代理。默认开启，使 DNS（含引导解析）在代理启动前即可工作；关闭则按代理规则走"
 
 msgid "Bypass fwmark"
 msgstr "绕过标记（fwmark）"

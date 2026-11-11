@@ -935,7 +935,7 @@ msgstr ""
 msgid "Bypass proxy for overseas DNS"
 msgstr ""
 
-msgid "Mark these queries with the bypass fwmark so they go out directly instead of through a transparent proxy on this router. Off = they follow your proxy rules (usually recommended in mainland China)"
+msgid "Mark these queries with the bypass fwmark so they go out directly instead of through a transparent proxy on this router. On by default so DNS (incl. bootstrap) works before the proxy is up; turn off to send them through your proxy rules"
 msgstr ""
 
 msgid "Bypass fwmark"
